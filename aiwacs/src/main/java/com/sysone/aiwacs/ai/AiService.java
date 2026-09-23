@@ -162,8 +162,10 @@ public class AiService {
                 .sorted(Comparator.comparingDouble(ProcInfo::mem).reversed()).limit(5)
                 .map(p -> ordered("name", p.name(), "mem", p.mem())).toList();
 
-        // 2-1) 세부 지표 (AI 진단 정확도 향상용)
+        // 2-1) 세부 지표 (AI 진단 정확도 향상용) + 1초간 측정한 I/O·페이지폴트 초당 값
         Map<String, Object> detail = metrics.detailMetrics();
+        MetricsService.IoSample io = metrics.sampleIo();
+        detail.putAll(io.rates());
 
         // 3) Gemini에게 해석 요청
         String prompt = """
@@ -178,6 +180,8 @@ public class AiService {
                 - 상태 판정(정상/주의/위험)은 이미 시스템이 내렸습니다. 바꾸지 말고 해석만 하세요.
                 - 원인을 단정하지 마세요. "~일 가능성이 있습니다", "~로 보입니다" 형태로만.
                 - 프로세스 목록을 참고해 어떤 프로세스가 원인일 가능성이 있는지 짚으세요.
+                - 페이지폴트·스왑·디스크 I/O 값이 인과관계를 뒷받침하는지 확인하고, 근거가 된 수치를 함께 언급하세요.
+                  수치가 낮으면 해당 연결고리는 '현재는 뚜렷하지 않다'고 말하세요.
                 - 전문적으로 분석하되, 결과 설명은 IT 비전문가도 이해하도록 쉬운 말로 풀어쓰세요.
                   (전문용어는 괄호로 쉽게 풀어서. 예: 페이지폴트(메모리에 없어 디스크에서 다시 읽는 현상))
                 - 반드시 아래 JSON 형식으로만 답하세요. 다른 말 금지.
@@ -191,12 +195,23 @@ public class AiService {
                 [세부 지표]
                 %s
 
+                [세부 지표 설명] (_s로 끝나는 값은 방금 1초 동안 측정한 초당 값)
+                - disk_read_mb_s / disk_write_mb_s: 디스크 읽기/쓰기 속도(MB/s)
+                - disk_busy_percent: 가장 바쁜 디스크가 작업 중이던 시간 비율. 높으면 디스크 병목 가능성
+                - disk_queue_length: 디스크 작업 대기열 길이. 계속 1 이상이면 작업이 밀리는 중
+                - swap_page_in_s / swap_page_out_s: 스왑(디스크)과 메모리 사이에 오간 페이지 수
+                - major_faults_s: 메모리에 없어 디스크까지 가서 읽어온 횟수. 높으면 메모리 부족 신호
+                - minor_faults_s: 메모리 안에서 처리된 가벼운 폴트. 수천 단위도 흔하며 단독으로는 문제 아님
+
                 [CPU 상위 프로세스]
                 %s
 
                 [메모리 상위 프로세스]
+                %s
+
+                [디스크 I/O 상위 프로세스] (io_kb_s: 읽기+쓰기 KB/s, major_faults_s: 해당 프로세스의 major 폴트/초)
                 %s""".formatted(gemini.toJson(status), gemini.toJson(detail),
-                gemini.toJson(topCpu), gemini.toJson(topMem));
+                gemini.toJson(topCpu), gemini.toJson(topMem), gemini.toJson(io.topIo()));
 
         JsonNode result;
         try {

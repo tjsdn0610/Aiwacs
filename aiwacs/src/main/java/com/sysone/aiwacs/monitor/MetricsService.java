@@ -171,15 +171,90 @@ public class MetricsService {
         long swapTotal = vm.getSwapTotal();
         d.put("swap_used_percent", swapTotal > 0 ? round1(vm.getSwapUsed() * 100.0 / swapTotal) : 0.0);
         d.put("swap_used_mb", round1(vm.getSwapUsed() / MB));
-
-        long read = 0, write = 0;
-        for (HWDiskStore disk : hal.getDiskStores()) {
-            read += disk.getReadBytes();
-            write += disk.getWriteBytes();
-        }
-        d.put("disk_read_mb", round1(read / MB));
-        d.put("disk_write_mb", round1(write / MB));
         return d;
+    }
+
+    /** 1초 동안 측정한 디스크 I/O·페이지폴트 초당 값 + I/O 상위 프로세스 */
+    public record IoSample(Map<String, Object> rates, List<Map<String, Object>> topIo) {}
+
+    /**
+     * 디스크 I/O와 페이지폴트는 누적값이라 그대로는 "지금" 상태를 알 수 없다.
+     * 1초 간격으로 두 번 읽어 그 차이를 초당 값으로 계산한다. (AI 진단 근거용)
+     */
+    public IoSample sampleIo() {
+        List<HWDiskStore> disks = hal.getDiskStores();
+        VirtualMemory vm = memory.getVirtualMemory();
+
+        long[] read1 = new long[disks.size()], write1 = new long[disks.size()], busy1 = new long[disks.size()];
+        for (int i = 0; i < disks.size(); i++) {
+            read1[i] = disks.get(i).getReadBytes();
+            write1[i] = disks.get(i).getWriteBytes();
+            busy1[i] = disks.get(i).getTransferTime();
+        }
+        long pageIn1 = vm.getSwapPagesIn();
+        long pageOut1 = vm.getSwapPagesOut();
+        Map<Integer, OSProcess> procs1 = new HashMap<>();
+        for (OSProcess p : os.getProcesses()) {
+            procs1.put(p.getProcessID(), p);
+        }
+        long start = System.currentTimeMillis();
+
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        long elapsedMs = Math.max(1, System.currentTimeMillis() - start);
+        double sec = elapsedMs / 1000.0;
+
+        // 디스크: 전체 읽기/쓰기 속도 + 가장 바쁜 디스크의 busy 비율과 대기열
+        long readDelta = 0, writeDelta = 0;
+        double maxBusy = 0;
+        long maxQueue = 0;
+        for (int i = 0; i < disks.size(); i++) {
+            HWDiskStore d = disks.get(i);
+            d.updateAttributes();
+            readDelta += Math.max(0, d.getReadBytes() - read1[i]);
+            writeDelta += Math.max(0, d.getWriteBytes() - write1[i]);
+            maxBusy = Math.max(maxBusy, (d.getTransferTime() - busy1[i]) * 100.0 / elapsedMs);
+            maxQueue = Math.max(maxQueue, d.getCurrentQueueLength());
+        }
+
+        // 페이지폴트: 두 번 모두 보인 프로세스의 증가분 합계
+        long majorDelta = 0, minorDelta = 0;
+        List<Map<String, Object>> ioProcs = new ArrayList<>();
+        for (OSProcess p : os.getProcesses()) {
+            OSProcess before = procs1.get(p.getProcessID());
+            if (before == null) {
+                continue;
+            }
+            long major = Math.max(0, p.getMajorFaults() - before.getMajorFaults());
+            long minor = Math.max(0, p.getMinorFaults() - before.getMinorFaults());
+            long io = Math.max(0, (p.getBytesRead() + p.getBytesWritten())
+                    - (before.getBytesRead() + before.getBytesWritten()));
+            majorDelta += major;
+            minorDelta += minor;
+            if (io > 0 || major > 0) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("name", p.getName());
+                m.put("io_kb_s", round1(io / 1024.0 / sec));
+                m.put("major_faults_s", round1(major / sec));
+                ioProcs.add(m);
+            }
+        }
+        ioProcs.sort(Comparator.comparingDouble((Map<String, Object> m) -> (double) m.get("io_kb_s")).reversed());
+
+        Map<String, Object> rates = new LinkedHashMap<>();
+        rates.put("disk_read_mb_s", round2(readDelta / MB / sec));
+        rates.put("disk_write_mb_s", round2(writeDelta / MB / sec));
+        rates.put("disk_busy_percent", round1(Math.min(100, maxBusy)));
+        rates.put("disk_queue_length", maxQueue);
+        rates.put("swap_page_in_s", round1(Math.max(0, vm.getSwapPagesIn() - pageIn1) / sec));
+        rates.put("swap_page_out_s", round1(Math.max(0, vm.getSwapPagesOut() - pageOut1) / sec));
+        rates.put("major_faults_s", round1(majorDelta / sec));
+        rates.put("minor_faults_s", round1(minorDelta / sec));
+        return new IoSample(rates, ioProcs.stream().limit(5).toList());
     }
 
     private static Map<String, Long> readLinuxMeminfo() {

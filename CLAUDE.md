@@ -72,9 +72,12 @@ docker compose up -d      # DB 켜기 (Docker Desktop 필요)
 
 ### 세부 지표 (진단 정확도용, OSHI로 수집)
 - CPU: 사용률, 코어수, Load Average, Context Switch
-- 메모리: 사용률, Cached, Buffers, Available, Swap
-- 디스크: 사용률, I/O 읽기/쓰기
+- 메모리: 사용률, Cached, Buffers, Available, Swap, 스왑 page-in/out(초당), Major/Minor 페이지폴트(초당)
+- 디스크: 사용률, I/O 읽기/쓰기(MB/s), busy 비율, 대기열 길이
+- 프로세스: CPU 상위, 메모리 상위, 디스크 I/O 상위(프로세스별 major 폴트 포함)
 - ※ Cached/Buffers는 리눅스 전용 개념이라 `/proc/meminfo`가 있을 때만 수집 (macOS에선 생략)
+- ※ I/O·페이지폴트는 누적값이 아니라 진단 시점에 **1초간 측정한 초당 값** (`MetricsService.sampleIo`)
+- ※ 프롬프트에 각 지표의 뜻을 설명하고, "근거 수치를 함께 언급 / 수치가 낮으면 '뚜렷하지 않다'고 말할 것"을 규칙으로 둠
 
 ### 안정성 보완 사항
 - AI 임계치 변경: 0~100 범위를 벗어난 값은 코드가 저장 거부
