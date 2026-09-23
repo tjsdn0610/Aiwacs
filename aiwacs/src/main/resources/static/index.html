@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AiWACS</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+        background: #eef0f4;
+        color: #333;
+        font-size: 13px;
+      }
+      .layout {
+        display: flex;
+        min-height: 100vh;
+      }
+
+      /* ===== 사이드바 ===== */
+      .sidebar {
+        width: 170px;
+        background: #fff;
+        border-right: 1px solid #e3e6ec;
+        flex-shrink: 0;
+      }
+      .logo {
+        padding: 16px 18px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #1b2140;
+        border-bottom: 1px solid #eef0f4;
+      }
+      .logo span {
+        color: #3f6ad8;
+      }
+      .menu {
+        padding: 8px 0;
+      }
+      .menu-item {
+        padding: 9px 18px;
+        color: #5a6072;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .menu-item:hover {
+        background: #f5f6fa;
+      }
+      .menu-item.active {
+        background: #3f6ad8;
+        color: #fff;
+        font-weight: 600;
+      }
+      .menu-item.sub {
+        padding-left: 34px;
+        font-size: 12px;
+        color: #7a8194;
+      }
+      .menu-item.sub.active {
+        background: #eaf0fb;
+        color: #3f6ad8;
+      }
+      .menu-cat {
+        padding: 9px 18px;
+        color: #3a3f52;
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      /* ===== 메인 영역 ===== */
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .topbar {
+        background: #fff;
+        border-bottom: 1px solid #e3e6ec;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .breadcrumb {
+        color: #7a8194;
+        font-size: 12px;
+      }
+      .topbar-right {
+        color: #7a8194;
+        font-size: 12px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      .topbar-right b {
+        color: #3f6ad8;
+      }
+      .content {
+        padding: 16px;
+        display: grid;
+        grid-template-columns: 340px 1fr;
+        gap: 16px;
+      }
+
+      .panel {
+        background: #fff;
+        border: 1px solid #e3e6ec;
+        border-radius: 4px;
+        padding: 14px;
+      }
+      .panel-title {
+        font-weight: 700;
+        color: #3a3f52;
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+
+      /* 장비 현황 6칸 */
+      .status-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+      }
+      .status-box {
+        border: 1px solid #eef0f4;
+        border-radius: 4px;
+        padding: 10px;
+        text-align: center;
+      }
+      .status-box .label {
+        font-size: 11px;
+        color: #9098aa;
+        margin-bottom: 6px;
+      }
+      .status-box .num {
+        font-size: 26px;
+        font-weight: 800;
+      }
+      .n-total {
+        color: #3a3f52;
+      }
+      .n-caution {
+        color: #e0a020;
+      }
+      .n-warn {
+        color: #e08820;
+      }
+      .n-danger {
+        color: #d64545;
+      }
+      .n-fault {
+        color: #c0392b;
+      }
+      .n-down {
+        color: #7a8194;
+      }
+
+      /* OS */
+      .os-row {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid #eef0f4;
+        text-align: center;
+      }
+      .os-row .os-label {
+        font-size: 11px;
+        color: #5a6072;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .os-row .os-num {
+        font-size: 16px;
+        font-weight: 700;
+        color: #3a3f52;
+      }
+
+      /* 그룹별 알림 */
+      .grp-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 6px;
+        font-size: 12px;
+      }
+      .grp-table th {
+        text-align: left;
+        color: #9098aa;
+        font-weight: 600;
+        padding: 6px 4px;
+        border-bottom: 1px solid #eef0f4;
+      }
+      .grp-table td {
+        padding: 8px 4px;
+        color: #5a6072;
+        border-bottom: 1px solid #f5f6fa;
+      }
+
+      /* 오른쪽 위젯들 */
+      .right-col {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .resource-map {
+        position: relative;
+      }
+      .map-tabs {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        display: flex;
+        gap: 2px;
+      }
+      .map-tab {
+        font-size: 11px;
+        padding: 3px 9px;
+        border: 1px solid #e3e6ec;
+        color: #7a8194;
+        cursor: pointer;
+        background: #fff;
+      }
+      .map-tab.active {
+        background: #3f6ad8;
+        color: #fff;
+        border-color: #3f6ad8;
+      }
+      .chart-area {
+        height: 200px;
+        position: relative;
+        margin-top: 8px;
+      }
+      .top5-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .top5 {
+        min-height: 150px;
+      }
+      .nodata {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 120px;
+        color: #b0b6c4;
+        font-size: 12px;
+      }
+      svg {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <!-- 사이드바 -->
+      <aside class="sidebar">
+        <div class="logo" onclick="location.href = '/'" style="cursor: pointer">
+          Ai<span>WACS</span>
+        </div>
+        <div class="menu">
+          <div class="menu-cat">대시보드 <span>˄</span></div>
+          <div class="menu-item sub active">요약</div>
+          <div class="menu-item sub">실시간</div>
+          <div class="menu-item">장비 목록</div>
+          <div class="menu-item">ICMP</div>
+          <div class="menu-item">프로세스</div>
+          <div class="menu-item">추적</div>
+          <div class="menu-item">서비스</div>
+          <div class="menu-item">로그 조회</div>
+          <div class="menu-item">알림</div>
+          <div class="menu-item">
+            <a href="/ai" style="color: inherit; text-decoration: none"
+              >AI 운영 도우미</a
+            >
+          </div>
+          <div class="menu-item">장비 비교/분석</div>
+          <div class="menu-item">보고서</div>
+          <div class="menu-item">장비 모니터링</div>
+          <div class="menu-item">
+            <a href="/policy" style="color: inherit; text-decoration: none"
+              >정책 관리</a
+            >
+          </div>
+          <div class="menu-item">그룹 설정</div>
+          <div class="menu-item">환경설정</div>
+        </div>
+      </aside>
+
+      <!-- 메인 -->
+      <div class="main">
+        <div class="topbar">
+          <div class="breadcrumb">홈 &gt; 대시보드 &gt; 요약</div>
+          <div class="topbar-right">
+            <span><b>aiwacs</b>님, 환영합니다.</span>
+            <span>현재 시각: <span id="clock">--:--:--</span></span>
+            <span>Company ▾</span>
+          </div>
+        </div>
+
+        <div class="content">
+          <!-- 왼쪽 열 -->
+          <div class="left-col">
+            <div class="panel">
+              <div class="panel-title">장비 현황</div>
+              <div class="status-grid">
+                <div class="status-box">
+                  <div class="label">전체</div>
+                  <div class="num n-total">1</div>
+                </div>
+                <div class="status-box">
+                  <div class="label">주의</div>
+                  <div class="num n-caution" id="s-caution">0</div>
+                </div>
+                <div class="status-box">
+                  <div class="label">경고</div>
+                  <div class="num n-warn" id="s-warn">0</div>
+                </div>
+                <div class="status-box">
+                  <div class="label">위험</div>
+                  <div class="num n-danger" id="s-danger">0</div>
+                </div>
+                <div class="status-box">
+                  <div class="label">장애</div>
+                  <div class="num n-fault">0</div>
+                </div>
+                <div class="status-box">
+                  <div class="label">다운</div>
+                  <div class="num n-down">0</div>
+                </div>
+              </div>
+              <div class="os-row">
+                <div>
+                  <div class="os-label">Windows</div>
+                  <div class="os-num">0</div>
+                </div>
+                <div>
+                  <div class="os-label">Unix</div>
+                  <div class="os-num">0</div>
+                </div>
+                <div>
+                  <div class="os-label">Linux</div>
+                  <div class="os-num">1</div>
+                </div>
+                <div>
+                  <div class="os-label">Others</div>
+                  <div class="os-num">0</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" style="margin-top: 16px">
+              <div class="panel-title">그룹별 알림 현황</div>
+              <table class="grp-table">
+                <tr>
+                  <th>장비 그룹</th>
+                  <th>주의</th>
+                  <th>경고</th>
+                  <th>위험</th>
+                  <th>장애</th>
+                </tr>
+                <tr>
+                  <td>미지정</td>
+                  <td>0</td>
+                  <td>0</td>
+                  <td>0</td>
+                  <td>0</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+
+          <!-- 오른쪽 열 -->
+          <div class="right-col">
+            <div class="panel resource-map">
+              <div class="panel-title">Resource Map</div>
+              <div class="map-tabs">
+                <div class="map-tab active" data-metric="cpu">CPU</div>
+                <div class="map-tab" data-metric="memory">MEMORY</div>
+                <div class="map-tab" data-metric="disk">DISK</div>
+                <div class="map-tab" data-metric="traffic">TRAFFIC</div>
+              </div>
+              <div class="chart-area">
+                <svg
+                  id="chart"
+                  width="100%"
+                  height="200"
+                  viewBox="0 0 800 200"
+                  preserveAspectRatio="none"
+                ></svg>
+              </div>
+            </div>
+
+            <div class="top5-grid">
+              <div class="panel top5">
+                <div class="panel-title">CPU 사용량 TOP5 (%)</div>
+                <div class="nodata" id="cpu-top">불러오는 중...</div>
+              </div>
+              <div class="panel top5">
+                <div class="panel-title">메모리 사용량 TOP5 (%)</div>
+                <div class="nodata" id="mem-top">불러오는 중...</div>
+              </div>
+              <div class="panel top5">
+                <div class="panel-title">디스크 사용량 (%)</div>
+                <div class="nodata" id="disk-top">불러오는 중...</div>
+              </div>
+              <div class="panel top5">
+                <div class="panel-title">트래픽 (KB/s)</div>
+                <div class="nodata" id="traffic-top">불러오는 중...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 시계
+      setInterval(() => {
+        document.getElementById("clock").textContent =
+          new Date().toLocaleTimeString("ko-KR");
+      }, 1000);
+
+      // 4개 지표 각각 시계열로 저장 (최근 40개)
+      let history = { cpu: [], memory: [], disk: [], traffic: [] };
+      let currentTab = "cpu"; // 현재 선택된 탭
+
+      async function update() {
+        try {
+          const res = await fetch("/api/status");
+          const d = await res.json();
+          // 각 지표 값 쌓기 (판정 결과에서 value 추출)
+          pushVal("cpu", d.cpu.value);
+          pushVal("memory", d.memory.value);
+          pushVal("disk", d.disk.value);
+          drawChart();
+
+          // 장비 현황 카운트: 이 서버 1대의 상태를 집계
+          let caution = 0,
+            danger = 0;
+          [d.cpu, d.memory, d.disk].forEach((m) => {
+            if (m.status === "위험") danger++;
+            else if (m.status === "주의") caution++;
+          });
+          // 가장 심각한 상태 하나로 이 장비 판정
+          const worst = danger > 0 ? "위험" : caution > 0 ? "주의" : "정상";
+          document.getElementById("s-caution").textContent =
+            worst === "주의" ? 1 : 0;
+          document.getElementById("s-danger").textContent =
+            worst === "위험" ? 1 : 0;
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      function pushVal(key, val) {
+        history[key].push(val);
+        if (history[key].length > 40) history[key].shift();
+      }
+
+      function drawChart() {
+        const svg = document.getElementById("chart");
+        const W = 800,
+          H = 200;
+        const data = history[currentTab];
+        // 트래픽은 %가 아니라 KB/s라 스케일을 데이터 최대값 기준으로
+        const max =
+          currentTab === "traffic" ? Math.max(10, ...data) * 1.2 : 100;
+        // 색상: 지표별로 다르게
+        const colors = {
+          cpu: "#3f6ad8",
+          memory: "#2e9e52",
+          disk: "#e0a020",
+          traffic: "#9b59b6",
+        };
+        const color = colors[currentTab];
+
+        let pts = data
+          .map((v, i) => {
+            const x = (i / 39) * W;
+            const y = H - (v / max) * H;
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+          .join(" ");
+
+        // 격자 + Y축 라벨
+        let grid = "";
+        for (let i = 0; i <= 5; i++) {
+          const y = (i / 5) * H;
+          grid += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#eef0f4" stroke-width="1"/>`;
+        }
+        // 채움 영역 (선 아래)
+        let area = "";
+        if (data.length > 1) {
+          area = `<polyline points="0,${H} ${pts} ${(((data.length - 1) / 39) * W).toFixed(1)},${H}" fill="${color}" opacity="0.08"/>`;
+        }
+        svg.innerHTML =
+          grid +
+          area +
+          (data.length > 1
+            ? `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>`
+            : "");
+      }
+
+      // 탭 클릭 이벤트
+      document.querySelectorAll(".map-tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document
+            .querySelectorAll(".map-tab")
+            .forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          currentTab = tab.dataset.metric;
+          drawChart();
+        });
+      });
+
+      // 프로세스 TOP5
+      async function updateProcs() {
+        try {
+          const res = await fetch("/api/procs");
+          const list = await res.json();
+          const cpuHtml = list
+            .slice(0, 5)
+            .map(
+              (p) =>
+                `<div style="padding:4px 0;font-size:12px;">${p.name} <b style="float:right;color:#3f6ad8">${p.cpu.toFixed(1)}%</b></div>`,
+            )
+            .join("");
+          const memHtml = list
+            .slice(0, 5)
+            .sort((a, b) => b.mem - a.mem)
+            .map(
+              (p) =>
+                `<div style="padding:4px 0;font-size:12px;">${p.name} <b style="float:right;color:#3f6ad8">${p.mem.toFixed(1)}%</b></div>`,
+            )
+            .join("");
+          const c = document.getElementById("cpu-top");
+          c.className = "";
+          c.innerHTML = cpuHtml;
+          const m = document.getElementById("mem-top");
+          m.className = "";
+          m.innerHTML = memHtml;
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      // 디스크 파티션별
+      async function updateDisk() {
+        try {
+          const res = await fetch("/api/disk");
+          const list = await res.json();
+          const html = list
+            .map((d) => {
+              const color =
+                d.percent >= 90
+                  ? "#d64545"
+                  : d.percent >= 70
+                    ? "#e0a020"
+                    : "#3f6ad8";
+              return `<div style="padding:6px 0;font-size:12px;">
+          <div style="display:flex;justify-content:space-between;">
+            <span>${d.name}</span><b style="color:${color}">${d.percent}%</b>
+          </div>
+          <div style="background:#eef0f4;height:5px;border-radius:3px;margin-top:3px;">
+            <div style="background:${color};height:5px;border-radius:3px;width:${d.percent}%;"></div>
+          </div>
+        </div>`;
+            })
+            .join("");
+          const el = document.getElementById("disk-top");
+          el.className = "";
+          el.innerHTML = html;
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      // 트래픽 송수신
+      async function updateTraffic() {
+        try {
+          const res = await fetch("/api/traffic");
+          const t = await res.json();
+          // 차트용: 송신+수신 합계를 트래픽 시계열에 쌓기
+          pushVal("traffic", t.sent + t.recv);
+          if (currentTab === "traffic") drawChart();
+          const html = `
+        <div style="padding:8px 0;font-size:13px;">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;">
+            <span>▲ 송신</span><b style="color:#3f6ad8">${t.sent} KB/s</b>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;">
+            <span>▼ 수신</span><b style="color:#2e9e52">${t.recv} KB/s</b>
+          </div>
+        </div>`;
+          const el = document.getElementById("traffic-top");
+          el.className = "";
+          el.innerHTML = html;
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      update();
+      updateProcs();
+      updateDisk();
+      updateTraffic();
+      setInterval(update, 2000);
+      setInterval(updateProcs, 5000);
+      setInterval(updateDisk, 5000);
+      setInterval(updateTraffic, 2000);
+    </script>
+  </body>
+</html>

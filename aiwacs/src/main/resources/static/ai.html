@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AiWACS - AI 운영 도우미</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+        background: #eef0f4;
+        color: #333;
+        font-size: 13px;
+      }
+      .layout {
+        display: flex;
+        min-height: 100vh;
+      }
+      .sidebar {
+        width: 170px;
+        background: #fff;
+        border-right: 1px solid #e3e6ec;
+        flex-shrink: 0;
+      }
+      .logo {
+        padding: 16px 18px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #1b2140;
+        border-bottom: 1px solid #eef0f4;
+      }
+      .logo span {
+        color: #3f6ad8;
+      }
+      .menu {
+        padding: 8px 0;
+      }
+      .menu-item {
+        padding: 9px 18px;
+        color: #5a6072;
+        cursor: pointer;
+      }
+      .menu-item:hover {
+        background: #f5f6fa;
+      }
+      .menu-item a {
+        color: inherit;
+        text-decoration: none;
+        display: block;
+      }
+      .menu-item.active {
+        background: #3f6ad8;
+        color: #fff;
+        font-weight: 600;
+      }
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .topbar {
+        background: #fff;
+        border-bottom: 1px solid #e3e6ec;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .breadcrumb {
+        color: #7a8194;
+        font-size: 12px;
+      }
+      .breadcrumb b {
+        color: #3f6ad8;
+      }
+      .topbar-right {
+        color: #7a8194;
+        font-size: 12px;
+      }
+      .topbar-right b {
+        color: #3f6ad8;
+      }
+      .content {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .ai-panel {
+        background: #fff;
+        border: 1px solid #e3e6ec;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 760px;
+        overflow: hidden;
+      }
+      .ai-head {
+        padding: 16px 20px;
+        border-bottom: 1px solid #eef0f4;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .ai-head .title {
+        font-weight: 700;
+        color: #3a3f52;
+        font-size: 15px;
+      }
+      .ai-head .badge {
+        background: #e8b24a;
+        color: #3a2a00;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 2px 8px;
+        border-radius: 10px;
+      }
+      .ai-head .sub {
+        color: #9098aa;
+        font-size: 12px;
+      }
+      .current {
+        padding: 14px 20px;
+        background: #f8f9fc;
+        border-bottom: 1px solid #eef0f4;
+        max-height: 130px;
+        overflow-y: auto;
+      }
+      .current .clabel {
+        font-size: 11px;
+        color: #9098aa;
+        margin-bottom: 8px;
+      }
+      .pol-item {
+        font-size: 12px;
+        padding: 5px 0;
+        border-bottom: 1px dashed #eef0f4;
+      }
+      .pol-item:last-child {
+        border: none;
+      }
+      .pol-item .company-tag {
+        background: #eaf0fb;
+        color: #3f6ad8;
+        padding: 1px 7px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-right: 6px;
+      }
+      .pol-item .vals {
+        color: #7a8194;
+      }
+      .chat {
+        height: 300px;
+        overflow-y: auto;
+        padding: 16px 20px;
+      }
+      .msg {
+        margin-bottom: 14px;
+        display: flex;
+      }
+      .msg.user {
+        justify-content: flex-end;
+      }
+      .bubble {
+        max-width: 75%;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .msg.user .bubble {
+        background: #3f6ad8;
+        color: #fff;
+        border-bottom-right-radius: 3px;
+      }
+      .msg.ai .bubble {
+        background: #f0f2f6;
+        color: #3a3f52;
+        border-bottom-left-radius: 3px;
+      }
+      .msg.ai.ok .bubble {
+        background: #eaf3ec;
+        color: #256e3a;
+        border: 1px solid #cfe6d5;
+      }
+      .msg.ai.fail .bubble {
+        background: #fbeeee;
+        color: #a03535;
+        border: 1px solid #f0d5d5;
+      }
+      .hint {
+        color: #b0b6c4;
+        font-size: 12px;
+        text-align: center;
+        margin-top: 30px;
+        line-height: 1.8;
+      }
+      .hint .ex {
+        display: inline-block;
+        background: #f0f2f6;
+        color: #5a6072;
+        padding: 4px 10px;
+        border-radius: 12px;
+        margin: 3px;
+        cursor: pointer;
+      }
+      .hint .ex:hover {
+        background: #e3e8f2;
+      }
+      .input-row {
+        padding: 14px 20px;
+        border-top: 1px solid #eef0f4;
+        display: flex;
+        gap: 8px;
+      }
+      .input-row input {
+        flex: 1;
+        padding: 10px 14px;
+        border: 1px solid #d5d9e2;
+        border-radius: 20px;
+        font-size: 13px;
+        outline: none;
+      }
+      .input-row input:focus {
+        border-color: #3f6ad8;
+      }
+      .input-row button {
+        padding: 10px 20px;
+        background: #3f6ad8;
+        color: #fff;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .input-row button:disabled {
+        background: #b0b6c4;
+      }
+
+      /* 상단 탭 */
+      .top-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 16px;
+        width: 100%;
+        max-width: 760px;
+      }
+      .top-tab {
+        padding: 10px 20px;
+        background: #e3e6ec;
+        color: #7a8194;
+        border-radius: 8px 8px 0 0;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .top-tab.active {
+        background: #fff;
+        color: #3f6ad8;
+        border: 1px solid #e3e6ec;
+        border-bottom: none;
+      }
+
+      /* 진단 패널 */
+      .diag-body {
+        padding: 24px 20px;
+        text-align: center;
+      }
+      .diag-btn {
+        padding: 12px 32px;
+        background: #3f6ad8;
+        color: #fff;
+        border: none;
+        border-radius: 24px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .diag-btn:disabled {
+        background: #b0b6c4;
+      }
+      .diag-result {
+        margin-top: 20px;
+        text-align: left;
+      }
+      .diag-status {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
+      .diag-metric {
+        border: 1px solid #eef0f4;
+        border-radius: 8px;
+        padding: 12px 18px;
+        text-align: center;
+        min-width: 100px;
+      }
+      .diag-metric .m-name {
+        font-size: 11px;
+        color: #9098aa;
+      }
+      .diag-metric .m-val {
+        font-size: 22px;
+        font-weight: 800;
+        margin: 4px 0;
+      }
+      .diag-metric .m-status {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 10px;
+      }
+      .st-정상 {
+        background: #eaf3ec;
+        color: #2e9e52;
+      }
+      .st-주의 {
+        background: #fbefd6;
+        color: #b0791a;
+      }
+      .st-위험 {
+        background: #fbeeee;
+        color: #d64545;
+      }
+      .diag-card {
+        background: #f8f9fc;
+        border: 1px solid #eef0f4;
+        border-radius: 10px;
+        padding: 18px;
+      }
+      .diag-level {
+        display: inline-block;
+        font-weight: 800;
+        font-size: 13px;
+        padding: 4px 12px;
+        border-radius: 14px;
+        margin-bottom: 12px;
+      }
+      .diag-row {
+        margin-bottom: 12px;
+      }
+      .diag-row .r-label {
+        font-weight: 800;
+        font-size: 12px;
+        color: #3f6ad8;
+        margin-bottom: 4px;
+      }
+      .diag-row .r-text {
+        font-size: 13px;
+        color: #3a3f52;
+        line-height: 1.5;
+      }
+      .diag-row ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .diag-row li {
+        font-size: 13px;
+        color: #3a3f52;
+        line-height: 1.6;
+      }
+      /* 상관관계 분석 강조 박스 */
+      .diag-correlation {
+        background: #eef3fc;
+        border-left: 4px solid #3f6ad8;
+        border-radius: 0 8px 8px 0;
+        padding: 14px 16px;
+        margin: 14px 0;
+      }
+      .corr-label {
+        font-weight: 800;
+        font-size: 13px;
+        color: #3f6ad8;
+        margin-bottom: 6px;
+      }
+      .corr-text {
+        font-size: 13px;
+        color: #2c3350;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="logo" onclick="location.href = '/'" style="cursor: pointer">
+          Ai<span>WACS</span>
+        </div>
+        <div class="menu">
+          <div class="menu-item"><a href="/">대시보드</a></div>
+          <div class="menu-item">장비 목록</div>
+          <div class="menu-item">ICMP</div>
+          <div class="menu-item">프로세스</div>
+          <div class="menu-item">추적</div>
+          <div class="menu-item">서비스</div>
+          <div class="menu-item">로그 조회</div>
+          <div class="menu-item">알림</div>
+          <div class="menu-item active">AI 운영 도우미</div>
+          <div class="menu-item"><a href="/policy">정책 관리</a></div>
+          <div class="menu-item">그룹 설정</div>
+          <div class="menu-item">환경설정</div>
+        </div>
+      </aside>
+      <div class="main">
+        <div class="topbar">
+          <div class="breadcrumb">홈 &gt; <b>AI 운영 도우미</b></div>
+          <div class="topbar-right"><b>aiwacs</b>님, 환영합니다.</div>
+        </div>
+        <div class="content">
+          <!-- 상단 탭 전환 -->
+          <div class="top-tabs">
+            <div
+              class="top-tab active"
+              data-tab="diagnose"
+              onclick="switchTab('diagnose')"
+            >
+              AI 상태 진단
+            </div>
+            <div
+              class="top-tab"
+              data-tab="threshold"
+              onclick="switchTab('threshold')"
+            >
+              AI 임계치 설정
+            </div>
+          </div>
+
+          <!-- 진단 패널 -->
+          <div class="ai-panel" id="panel-diagnose">
+            <div class="ai-head">
+              <span class="title">AI 상태 진단</span>
+              <span class="badge">NEW</span>
+              <span class="sub"
+                >— 현재 서버 상태를 AI가 해석하고 살펴볼 방향을 안내합니다</span
+              >
+            </div>
+            <div class="diag-body">
+              <button class="diag-btn" id="diag-btn" onclick="runDiagnose()">
+                AI 진단 실행
+              </button>
+              <div id="diag-result" class="diag-result"></div>
+            </div>
+          </div>
+
+          <!-- 임계치 변경 패널 -->
+          <div class="ai-panel" id="panel-threshold" style="display: none">
+            <div class="ai-head">
+              <span class="title">AI 임계치 설정</span>
+              <span class="badge">NEW</span>
+              <span class="sub"
+                >— 기업/정책을 말하면 임계치를 바꿔드립니다</span
+              >
+            </div>
+            <div class="current">
+              <div class="clabel">현재 등록된 정책</div>
+              <div id="pol-list">불러오는 중...</div>
+            </div>
+            <div class="chat" id="chat">
+              <div class="hint" id="hint">
+                아래처럼 말해보세요<br />
+                <span class="ex" onclick="useExample(this)"
+                  >테라넷 DB서버 정책 메모리 위험 95%로 올려줘</span
+                >
+                <span class="ex" onclick="useExample(this)"
+                  >ABC ERP서버 정책 CPU 주의 60%로 낮춰줘</span
+                >
+              </div>
+            </div>
+            <div class="input-row">
+              <input
+                type="text"
+                id="msg-input"
+                placeholder="예: 테라넷 DB서버 정책 메모리 위험 임계치 95%로 올려줘"
+              />
+              <button id="send-btn" onclick="send()">전송</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // 탭 전환
+      function switchTab(tab) {
+        document
+          .querySelectorAll(".top-tab")
+          .forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
+        document.getElementById("panel-diagnose").style.display =
+          tab === "diagnose" ? "block" : "none";
+        document.getElementById("panel-threshold").style.display =
+          tab === "threshold" ? "block" : "none";
+      }
+
+      // AI 진단 실행
+      async function runDiagnose() {
+        const btn = document.getElementById("diag-btn");
+        const result = document.getElementById("diag-result");
+        btn.disabled = true;
+        result.innerHTML =
+          '<div style="color:#9098aa;padding:20px;">AI가 진단 중입니다...</div>';
+        try {
+          const res = await fetch("/api/ai/diagnose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            result.innerHTML = `<div style="color:#d64545;padding:20px;">${data.reply}</div>`;
+            btn.disabled = false;
+            return;
+          }
+
+          const names = { cpu: "CPU", memory: "메모리", disk: "디스크" };
+          // 현재 상태 카드
+          let statusHtml = '<div class="diag-status">';
+          for (const k of ["cpu", "memory", "disk"]) {
+            const s = data.status[k];
+            statusHtml += `<div class="diag-metric">
+          <div class="m-name">${names[k]}</div>
+          <div class="m-val">${s.value}%</div>
+          <div class="m-status st-${s.status}">${s.status}</div>
+        </div>`;
+          }
+          statusHtml += "</div>";
+
+          // AI 진단 카드
+          const d = data.diagnosis;
+          const levelColor =
+            d.level === "위험"
+              ? "st-위험"
+              : d.level === "주의"
+                ? "st-주의"
+                : "st-정상";
+          const causes = Array.isArray(d.causes)
+            ? d.causes.map((c) => `<li>${c}</li>`).join("")
+            : "";
+          const correlationHtml = d.correlation
+            ? `<div class="diag-correlation"><div class="corr-label">🔗 상관관계 분석</div><div class="corr-text">${d.correlation}</div></div>`
+            : "";
+          const diagHtml = `<div class="diag-card">
+        <span class="diag-level ${levelColor}">AI 진단: ${d.level}</span>
+        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${d.summary}</div></div>
+        ${correlationHtml}
+        <div class="diag-row"><div class="r-label">가능성 있는 원인</div><ul>${causes}</ul></div>
+        <div class="diag-row"><div class="r-label">확인 방법</div><div class="r-text">${d.check}</div></div>
+        <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${d.action}</div></div>
+      </div>`;
+
+          result.innerHTML = statusHtml + diagHtml;
+        } catch (e) {
+          result.innerHTML =
+            '<div style="color:#d64545;padding:20px;">진단 중 오류가 발생했습니다.</div>';
+        }
+        btn.disabled = false;
+      }
+
+      async function loadPolicies() {
+        const res = await fetch("/api/policies");
+        const data = await res.json();
+        document.getElementById("pol-list").innerHTML = data.policies
+          .map(
+            (p) => `
+      <div class="pol-item">
+        <span class="company-tag">${p.company}</span>${p.name}
+        <span class="vals"> · CPU ${p.cpu.warn}/${p.cpu.danger} · 메모리 ${p.memory.warn}/${p.memory.danger} · 디스크 ${p.disk.warn}/${p.disk.danger}</span>
+      </div>`,
+          )
+          .join("");
+      }
+      function useExample(el) {
+        document.getElementById("msg-input").value = el.textContent;
+        send();
+      }
+      function addMsg(text, cls) {
+        const hint = document.getElementById("hint");
+        if (hint) hint.remove();
+        const chat = document.getElementById("chat");
+        const div = document.createElement("div");
+        div.className = "msg " + cls;
+        // 줄바꿈(\n)을 <br>로 변환해서 표시
+        const safe = text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\n/g, "<br>");
+        div.innerHTML = `<div class="bubble">${safe}</div>`;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
+      async function send() {
+        const input = document.getElementById("msg-input");
+        const msg = input.value.trim();
+        if (!msg) return;
+        addMsg(msg, "user");
+        input.value = "";
+        const btn = document.getElementById("send-btn");
+        btn.disabled = true;
+        addMsg("처리 중...", "ai");
+        try {
+          const res = await fetch("/api/ai/threshold", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: msg }),
+          });
+          const data = await res.json();
+          const chat = document.getElementById("chat");
+          chat.removeChild(chat.lastChild);
+          addMsg(data.reply, "ai " + (data.ok ? "ok" : "fail"));
+          if (data.ok) loadPolicies();
+        } catch (e) {
+          const chat = document.getElementById("chat");
+          chat.removeChild(chat.lastChild);
+          addMsg("오류가 발생했습니다. 다시 시도해주세요.", "ai fail");
+        }
+        btn.disabled = false;
+        input.focus();
+      }
+      // 한글 IME 조합 상태 추적 (조합 중 엔터 방지)
+      const inputEl = document.getElementById("msg-input");
+      let isComposing = false;
+      inputEl.addEventListener("compositionstart", () => {
+        isComposing = true;
+      });
+      inputEl.addEventListener("compositionend", () => {
+        isComposing = false;
+      });
+      inputEl.addEventListener("keydown", (e) => {
+        // 한글 조합 중이면 엔터 무시 (조합 완료 후에만 전송)
+        if (e.key === "Enter" && !isComposing && !e.isComposing) {
+          e.preventDefault();
+          send();
+        }
+      });
+
+      loadPolicies();
+    </script>
+  </body>
+</html>

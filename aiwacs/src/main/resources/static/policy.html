@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AiWACS - 알림 정책</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+        background: #eef0f4;
+        color: #333;
+        font-size: 13px;
+      }
+      .layout {
+        display: flex;
+        min-height: 100vh;
+      }
+      .sidebar {
+        width: 170px;
+        background: #fff;
+        border-right: 1px solid #e3e6ec;
+        flex-shrink: 0;
+      }
+      .logo {
+        padding: 16px 18px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #1b2140;
+        border-bottom: 1px solid #eef0f4;
+      }
+      .logo span {
+        color: #3f6ad8;
+      }
+      .menu {
+        padding: 8px 0;
+      }
+      .menu-item {
+        padding: 9px 18px;
+        color: #5a6072;
+        cursor: pointer;
+      }
+      .menu-item:hover {
+        background: #f5f6fa;
+      }
+      .menu-item a {
+        color: inherit;
+        text-decoration: none;
+        display: block;
+      }
+      .menu-cat {
+        padding: 9px 18px;
+        color: #3a3f52;
+        font-weight: 600;
+      }
+      .menu-item.sub {
+        padding-left: 34px;
+        font-size: 12px;
+        color: #7a8194;
+      }
+      .menu-item.sub.active {
+        background: #3f6ad8;
+        color: #fff;
+        font-weight: 600;
+      }
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .topbar {
+        background: #fff;
+        border-bottom: 1px solid #e3e6ec;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .breadcrumb {
+        color: #7a8194;
+        font-size: 12px;
+      }
+      .breadcrumb b {
+        color: #3f6ad8;
+      }
+      .topbar-right {
+        color: #7a8194;
+        font-size: 12px;
+      }
+      .topbar-right b {
+        color: #3f6ad8;
+      }
+      .content {
+        padding: 16px;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .btn {
+        padding: 6px 16px;
+        border-radius: 4px;
+        border: 1px solid #3f6ad8;
+        background: #fff;
+        color: #3f6ad8;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn-primary {
+        background: #3f6ad8;
+        color: #fff;
+      }
+      .btn-gray {
+        border-color: #c3c8d4;
+        color: #7a8194;
+      }
+      .btn-danger {
+        border-color: #d64545;
+        color: #d64545;
+      }
+      .table {
+        width: 100%;
+        background: #fff;
+        border: 1px solid #e3e6ec;
+        border-collapse: collapse;
+      }
+      .table th {
+        background: #f5f6fa;
+        padding: 11px 12px;
+        text-align: left;
+        color: #5a6072;
+        font-weight: 600;
+        border-bottom: 1px solid #e3e6ec;
+        font-size: 12px;
+      }
+      .table td {
+        padding: 11px 12px;
+        border-bottom: 1px solid #f0f2f6;
+        color: #5a6072;
+      }
+      .table tr:hover {
+        background: #fafbfd;
+      }
+      .empty {
+        text-align: center;
+        color: #b0b6c4;
+        padding: 40px;
+      }
+      .company-tag {
+        background: #eaf0fb;
+        color: #3f6ad8;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .link {
+        color: #3f6ad8;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+      .del-link {
+        color: #d64545;
+        cursor: pointer;
+      }
+
+      .modal-bg {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 100;
+      }
+      .modal-bg.show {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 40px;
+      }
+      .modal {
+        background: #fff;
+        border-radius: 6px;
+        width: 640px;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      .modal-head {
+        padding: 16px 22px;
+        border-bottom: 1px solid #eef0f4;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-head h3 {
+        font-size: 16px;
+        color: #3a3f52;
+      }
+      .modal-head .close {
+        cursor: pointer;
+        color: #9098aa;
+        font-size: 20px;
+        background: none;
+        border: none;
+      }
+      .modal-body {
+        padding: 22px;
+      }
+      .form-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .form-row label {
+        width: 90px;
+        color: #5a6072;
+        font-weight: 600;
+      }
+      .form-row input[type="text"] {
+        flex: 1;
+        padding: 8px 10px;
+        border: 1px solid #d5d9e2;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      .metric-block {
+        border-top: 1px solid #eef0f4;
+        padding: 14px 0;
+      }
+      .metric-head {
+        font-weight: 700;
+        color: #3a3f52;
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+      .th-row {
+        display: flex;
+        gap: 24px;
+        padding-left: 8px;
+      }
+      .th-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .th-item .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+      .th-item .dot.warn {
+        background: #e0a020;
+      }
+      .th-item .dot.danger {
+        background: #d64545;
+      }
+      .th-item input {
+        width: 70px;
+        padding: 6px 8px;
+        border: 1px solid #d5d9e2;
+        border-radius: 4px;
+        text-align: center;
+        font-size: 13px;
+      }
+      .th-item .unit {
+        color: #9098aa;
+      }
+      .modal-foot {
+        padding: 16px 22px;
+        border-top: 1px solid #eef0f4;
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+      }
+      .toast {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #3a3f52;
+        color: #fff;
+        padding: 12px 24px;
+        border-radius: 6px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 200;
+      }
+      .toast.show {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="logo" onclick="location.href = '/'" style="cursor: pointer">
+          Ai<span>WACS</span>
+        </div>
+        <div class="menu">
+          <div class="menu-item"><a href="/">대시보드</a></div>
+          <div class="menu-item">장비 목록</div>
+          <div class="menu-item">ICMP</div>
+          <div class="menu-item">프로세스</div>
+          <div class="menu-item">추적</div>
+          <div class="menu-item">서비스</div>
+          <div class="menu-item">로그 조회</div>
+          <div class="menu-item">알림</div>
+          <div class="menu-item"><a href="/ai">AI 운영 도우미</a></div>
+          <div class="menu-cat">정책 관리</div>
+          <div class="menu-item sub active">알림 정책</div>
+          <div class="menu-item sub">보고서 정책</div>
+          <div class="menu-item sub">경로 추적 정책</div>
+          <div class="menu-item">그룹 설정</div>
+          <div class="menu-item">환경설정</div>
+        </div>
+      </aside>
+
+      <div class="main">
+        <div class="topbar">
+          <div class="breadcrumb">홈 &gt; 정책 관리 &gt; <b>알림 정책</b></div>
+          <div class="topbar-right"><b>aiwacs</b>님, 환영합니다.</div>
+        </div>
+        <div class="content">
+          <div class="toolbar">
+            <button class="btn btn-primary" onclick="openAdd()">추가</button>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>고객사</th>
+                <th>정책 명</th>
+                <th>CPU (주의/위험)</th>
+                <th>메모리 (주의/위험)</th>
+                <th>디스크 (주의/위험)</th>
+                <th style="width: 120px">관리</th>
+              </tr>
+            </thead>
+            <tbody id="policy-list">
+              <tr>
+                <td colspan="6" class="empty">불러오는 중...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 추가/수정 모달 -->
+    <div class="modal-bg" id="modal">
+      <div class="modal">
+        <div class="modal-head">
+          <h3 id="modal-title">알림 정책 추가</h3>
+          <button class="close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="edit-id" value="" />
+          <div class="form-row">
+            <label>고객사</label>
+            <input type="text" id="f-company" placeholder="예: 테라넷" />
+          </div>
+          <div class="form-row">
+            <label>정책 명</label>
+            <input type="text" id="f-name" placeholder="예: DB서버 정책" />
+          </div>
+          <div class="metric-block">
+            <div class="metric-head">CPU (%)</div>
+            <div class="th-row">
+              <div class="th-item">
+                <span class="dot warn"></span><label>주의</label
+                ><input type="number" id="cpu-warn" value="70" /><span
+                  class="unit"
+                  >%</span
+                >
+              </div>
+              <div class="th-item">
+                <span class="dot danger"></span><label>위험</label
+                ><input type="number" id="cpu-danger" value="90" /><span
+                  class="unit"
+                  >%</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="metric-block">
+            <div class="metric-head">Memory (%)</div>
+            <div class="th-row">
+              <div class="th-item">
+                <span class="dot warn"></span><label>주의</label
+                ><input type="number" id="memory-warn" value="80" /><span
+                  class="unit"
+                  >%</span
+                >
+              </div>
+              <div class="th-item">
+                <span class="dot danger"></span><label>위험</label
+                ><input type="number" id="memory-danger" value="90" /><span
+                  class="unit"
+                  >%</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="metric-block">
+            <div class="metric-head">Disk (%)</div>
+            <div class="th-row">
+              <div class="th-item">
+                <span class="dot warn"></span><label>주의</label
+                ><input type="number" id="disk-warn" value="80" /><span
+                  class="unit"
+                  >%</span
+                >
+              </div>
+              <div class="th-item">
+                <span class="dot danger"></span><label>위험</label
+                ><input type="number" id="disk-danger" value="95" /><span
+                  class="unit"
+                  >%</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-primary" onclick="savePolicy()">저장</button>
+          <button class="btn btn-gray" onclick="closeModal()">취소</button>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+      async function loadList() {
+        const res = await fetch("/api/policies");
+        const data = await res.json();
+        const tbody = document.getElementById("policy-list");
+        if (!data.policies.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="6" class="empty">등록된 정책이 없습니다.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.policies
+          .map(
+            (p) => `
+      <tr>
+        <td><span class="company-tag">${p.company}</span></td>
+        <td>${p.name}</td>
+        <td>${p.cpu.warn}% / ${p.cpu.danger}%</td>
+        <td>${p.memory.warn}% / ${p.memory.danger}%</td>
+        <td>${p.disk.warn}% / ${p.disk.danger}%</td>
+        <td>
+          <span class="link" onclick='openEdit(${JSON.stringify(p)})'>수정</span> &nbsp;
+          <span class="del-link" onclick="delPolicy(${p.id})">삭제</span>
+        </td>
+      </tr>`,
+          )
+          .join("");
+      }
+
+      function openAdd() {
+        document.getElementById("modal-title").textContent = "알림 정책 추가";
+        document.getElementById("edit-id").value = "";
+        document.getElementById("f-company").value = "";
+        document.getElementById("f-name").value = "";
+        document.getElementById("cpu-warn").value = 70;
+        document.getElementById("cpu-danger").value = 90;
+        document.getElementById("memory-warn").value = 80;
+        document.getElementById("memory-danger").value = 90;
+        document.getElementById("disk-warn").value = 80;
+        document.getElementById("disk-danger").value = 95;
+        document.getElementById("modal").classList.add("show");
+      }
+
+      function openEdit(p) {
+        document.getElementById("modal-title").textContent = "알림 정책 수정";
+        document.getElementById("edit-id").value = p.id;
+        document.getElementById("f-company").value = p.company;
+        document.getElementById("f-name").value = p.name;
+        document.getElementById("cpu-warn").value = p.cpu.warn;
+        document.getElementById("cpu-danger").value = p.cpu.danger;
+        document.getElementById("memory-warn").value = p.memory.warn;
+        document.getElementById("memory-danger").value = p.memory.danger;
+        document.getElementById("disk-warn").value = p.disk.warn;
+        document.getElementById("disk-danger").value = p.disk.danger;
+        document.getElementById("modal").classList.add("show");
+      }
+
+      function closeModal() {
+        document.getElementById("modal").classList.remove("show");
+      }
+
+      async function savePolicy() {
+        const id = document.getElementById("edit-id").value;
+        const body = {
+          company: document.getElementById("f-company").value || "미지정",
+          name: document.getElementById("f-name").value || "새 정책",
+          cpu: {
+            warn: +document.getElementById("cpu-warn").value,
+            danger: +document.getElementById("cpu-danger").value,
+          },
+          memory: {
+            warn: +document.getElementById("memory-warn").value,
+            danger: +document.getElementById("memory-danger").value,
+          },
+          disk: {
+            warn: +document.getElementById("disk-warn").value,
+            danger: +document.getElementById("disk-danger").value,
+          },
+        };
+        if (id) {
+          await fetch("/api/policies/" + id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          showToast("정책이 수정되었습니다");
+        } else {
+          await fetch("/api/policies", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          showToast("정책이 추가되었습니다");
+        }
+        closeModal();
+        loadList();
+      }
+
+      async function delPolicy(id) {
+        if (!confirm("이 정책을 삭제하시겠습니까?")) return;
+        await fetch("/api/policies/" + id, { method: "DELETE" });
+        showToast("정책이 삭제되었습니다");
+        loadList();
+      }
+
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 2000);
+      }
+
+      loadList();
+    </script>
+  </body>
+</html>

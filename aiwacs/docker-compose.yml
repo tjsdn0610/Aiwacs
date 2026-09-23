@@ -1,0 +1,19 @@
+# 로컬 개발용 PostgreSQL
+# 실행: docker compose up -d   /   종료: docker compose down
+services:
+  postgres:
+    image: postgres:17
+    container_name: aiwacs-postgres
+    environment:
+      POSTGRES_DB: aiwacs
+      POSTGRES_USER: aiwacs
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-aiwacs}
+    ports:
+      - "5432:5432"
+    volumes:
+      - aiwacs-pgdata:/var/lib/postgresql/data
+
+volumes:
+  aiwacs-pgdata:
+    # 폴더 이름이 바뀌어도 같은 DB 데이터를 쓰도록 이름 고정
+    name: aiwacs-pgdata
