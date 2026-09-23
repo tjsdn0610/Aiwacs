@@ -101,6 +101,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - [x] 정책-서버 매칭 (고객사 → 서버 → 정책), 장비 이름 변경
 - [ ] AI 조치 실행 (프로세스 끄기/재시작 등) — 예정
 - [ ] Agent 자동 실행(systemd 서비스), Agent 로그 영어화(VM 콘솔 한글 깨짐) — 예정
+- [ ] 로컬 LLM으로도 동작해 보기 — 예정 (현재 Gemini). AI 호출은 `GeminiClient` 한 곳에 모여 있어 교체 지점이 명확함
 
 ### 세부 지표 (진단 정확도용, Agent가 OSHI로 수집)
 - CPU: 사용률, 코어수, Load Average, Context Switch
