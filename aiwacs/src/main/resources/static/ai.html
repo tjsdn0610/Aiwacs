@@ -285,6 +285,16 @@
       .diag-btn:disabled {
         background: #b0b6c4;
       }
+      .diag-server {
+        padding: 11px 14px;
+        margin-right: 8px;
+        border: 1px solid #e3e6ec;
+        border-radius: 24px;
+        font-size: 13px;
+        color: #3a3f52;
+        background: #fff;
+        vertical-align: middle;
+      }
       .diag-result {
         margin-top: 20px;
         text-align: left;
@@ -395,7 +405,7 @@
         </div>
         <div class="menu">
           <div class="menu-item"><a href="/">대시보드</a></div>
-          <div class="menu-item">장비 목록</div>
+          <div class="menu-item"><a href="/servers">장비 목록</a></div>
           <div class="menu-item">ICMP</div>
           <div class="menu-item">프로세스</div>
           <div class="menu-item">추적</div>
@@ -442,6 +452,9 @@
               >
             </div>
             <div class="diag-body">
+              <select id="diag-server" class="diag-server">
+                <option value="">서버 불러오는 중...</option>
+              </select>
               <button class="diag-btn" id="diag-btn" onclick="runDiagnose()">
                 AI 진단 실행
               </button>
@@ -505,10 +518,11 @@
         result.innerHTML =
           '<div style="color:#9098aa;padding:20px;">AI가 진단 중입니다...</div>';
         try {
+          const serverId = document.getElementById("diag-server").value;
           const res = await fetch("/api/ai/diagnose", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: "{}",
+            body: JSON.stringify({ serverId: serverId || null }),
           });
           const data = await res.json();
           if (!data.ok) {
@@ -559,6 +573,31 @@
             '<div style="color:#d64545;padding:20px;">진단 중 오류가 발생했습니다.</div>';
         }
         btn.disabled = false;
+      }
+
+      // 진단할 서버 목록 (온라인 서버만 선택 가능)
+      async function loadServerOptions() {
+        const sel = document.getElementById("diag-server");
+        const prev = sel.value;
+        try {
+          const list = await (await fetch("/api/servers")).json();
+          if (!list.length) {
+            sel.innerHTML = '<option value="">연결된 서버 없음</option>';
+            return;
+          }
+          sel.innerHTML = list
+            .map(
+              (s) =>
+                `<option value="${s.id}" ${s.online ? "" : "disabled"}>${s.company ? "[" + s.company + "] " : ""}${s.name}${s.online ? "" : " (오프라인)"}</option>`,
+            )
+            .join("");
+          // 이전에 고른 서버가 여전히 온라인이면 유지, 아니면 첫 온라인 서버
+          const keep = list.find((s) => String(s.id) === prev && s.online);
+          const first = list.find((s) => s.online);
+          sel.value = keep ? keep.id : first ? first.id : "";
+        } catch (e) {
+          console.log(e);
+        }
       }
 
       async function loadPolicies() {
@@ -640,6 +679,8 @@
       });
 
       loadPolicies();
+      loadServerOptions();
+      setInterval(loadServerOptions, 5000);
     </script>
   </body>
 </html>

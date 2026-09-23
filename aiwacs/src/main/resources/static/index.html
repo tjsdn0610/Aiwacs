@@ -257,6 +257,74 @@
       svg {
         display: block;
       }
+
+      /* 서버 선택 탭 */
+      .server-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .server-tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid #e3e6ec;
+        background: #fff;
+        font-size: 12px;
+        color: #5a6072;
+        cursor: pointer;
+      }
+      .server-tab.active {
+        border-color: #3f6ad8;
+        background: #f0f4ff;
+        color: #3f6ad8;
+        font-weight: 600;
+      }
+      .server-tab .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #b0b6c4;
+      }
+      .server-tab .dot.on {
+        background: #2e9e52;
+      }
+      .server-tab .lv {
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 3px;
+      }
+      .lv-정상 {
+        background: #e8f6ee;
+        color: #2e9e52;
+      }
+      .lv-주의 {
+        background: #fdf4e3;
+        color: #e0a020;
+      }
+      .lv-위험 {
+        background: #fbeaea;
+        color: #d64545;
+      }
+      .lv-오프라인 {
+        background: #f0f1f4;
+        color: #7a8194;
+      }
+      .server-empty {
+        font-size: 12px;
+        color: #9098aa;
+        padding: 6px 0;
+      }
+      .company-filter {
+        border: 1px solid #e3e6ec;
+        border-radius: 4px;
+        padding: 3px 6px;
+        font-size: 12px;
+        color: #3a3f52;
+        background: #fff;
+      }
     </style>
   </head>
   <body>
@@ -270,7 +338,7 @@
           <div class="menu-cat">대시보드 <span>˄</span></div>
           <div class="menu-item sub active">요약</div>
           <div class="menu-item sub">실시간</div>
-          <div class="menu-item">장비 목록</div>
+          <div class="menu-item"><a href="/servers" style="color: inherit; text-decoration: none">장비 목록</a></div>
           <div class="menu-item">ICMP</div>
           <div class="menu-item">프로세스</div>
           <div class="menu-item">추적</div>
@@ -302,7 +370,9 @@
           <div class="topbar-right">
             <span><b>aiwacs</b>님, 환영합니다.</span>
             <span>현재 시각: <span id="clock">--:--:--</span></span>
-            <span>Company ▾</span>
+            <select id="company-filter" class="company-filter" onchange="changeCompany(this.value)">
+              <option value="">Company ▾ 전체</option>
+            </select>
           </div>
         </div>
 
@@ -314,7 +384,7 @@
               <div class="status-grid">
                 <div class="status-box">
                   <div class="label">전체</div>
-                  <div class="num n-total">1</div>
+                  <div class="num n-total" id="s-total">0</div>
                 </div>
                 <div class="status-box">
                   <div class="label">주의</div>
@@ -334,25 +404,25 @@
                 </div>
                 <div class="status-box">
                   <div class="label">다운</div>
-                  <div class="num n-down">0</div>
+                  <div class="num n-down" id="s-down">0</div>
                 </div>
               </div>
               <div class="os-row">
                 <div>
                   <div class="os-label">Windows</div>
-                  <div class="os-num">0</div>
+                  <div class="os-num" id="os-windows">0</div>
                 </div>
                 <div>
                   <div class="os-label">Unix</div>
-                  <div class="os-num">0</div>
+                  <div class="os-num" id="os-unix">0</div>
                 </div>
                 <div>
                   <div class="os-label">Linux</div>
-                  <div class="os-num">1</div>
+                  <div class="os-num" id="os-linux">0</div>
                 </div>
                 <div>
                   <div class="os-label">Others</div>
-                  <div class="os-num">0</div>
+                  <div class="os-num" id="os-others">0</div>
                 </div>
               </div>
             </div>
@@ -369,9 +439,9 @@
                 </tr>
                 <tr>
                   <td>미지정</td>
+                  <td id="g-caution">0</td>
                   <td>0</td>
-                  <td>0</td>
-                  <td>0</td>
+                  <td id="g-danger">0</td>
                   <td>0</td>
                 </tr>
               </table>
@@ -380,6 +450,13 @@
 
           <!-- 오른쪽 열 -->
           <div class="right-col">
+            <div class="panel">
+              <div class="panel-title">모니터링 서버</div>
+              <div class="server-tabs" id="server-tabs">
+                <div class="server-empty">서버 목록을 불러오는 중...</div>
+              </div>
+            </div>
+
             <div class="panel resource-map">
               <div class="panel-title">Resource Map</div>
               <div class="map-tabs">
@@ -433,29 +510,135 @@
       let history = { cpu: [], memory: [], disk: [], traffic: [] };
       let currentTab = "cpu"; // 현재 선택된 탭
 
-      async function update() {
+      // ===== 모니터링 서버 (Agent가 연결된 서버 목록) =====
+      let selectedServerId = null; // 지금 화면에 보여주는 서버
+      let serverList = [];
+      let companyFilter = ""; // 상단 Company 선택 ("" = 전체)
+
+      // 상단 Company 목록 채우기 (정책에 등록된 고객사)
+      async function loadCompanies() {
         try {
-          const res = await fetch("/api/status");
+          const list = await (await fetch("/api/companies")).json();
+          const sel = document.getElementById("company-filter");
+          sel.innerHTML =
+            '<option value="">Company ▾ 전체</option>' +
+            list.map((c) => `<option value="${c}">${c}</option>`).join("");
+          sel.value = list.includes(companyFilter) ? companyFilter : "";
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      function changeCompany(value) {
+        companyFilter = value;
+        selectedServerId = null; // 고객사가 바뀌면 그 고객사의 첫 서버를 다시 고름
+        loadServers();
+      }
+
+      async function loadServers() {
+        try {
+          const res = await fetch("/api/servers");
+          const all = await res.json();
+          serverList = companyFilter ? all.filter((s) => s.company === companyFilter) : all;
+          // 처음이거나 선택한 서버가 목록에서 사라졌으면: 온라인 서버 우선으로 첫 번째 선택
+          if (serverList.length && !serverList.some((s) => s.id === selectedServerId)) {
+            selectServer((serverList.find((s) => s.online) || serverList[0]).id);
+          }
+          if (!serverList.length) selectedServerId = null;
+          renderServerTabs(serverList);
+          updateCounts(serverList);
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      function renderServerTabs(list) {
+        const box = document.getElementById("server-tabs");
+        if (!list.length) {
+          box.innerHTML = companyFilter
+            ? `<div class="server-empty">'${companyFilter}' 고객사에 지정된 서버가 없습니다. 장비 목록에서 고객사를 지정해 주세요.</div>`
+            : '<div class="server-empty">연결된 서버가 없습니다. 모니터링할 서버에서 Agent를 실행해 주세요.</div>';
+          clearWidgets();
+          return;
+        }
+        box.innerHTML = list
+          .map((s) => {
+            const lv = s.online ? s.level || "정상" : "오프라인";
+            return `<div class="server-tab ${s.id === selectedServerId ? "active" : ""}"
+                  onclick="selectServer(${s.id})" title="고객사: ${s.company || "미지정"}&#10;${s.os || ""} · ${s.ip || ""}&#10;정책: ${s.policyName || "-"}">
+              <span class="dot ${s.online ? "on" : ""}"></span>${s.name}
+              <span class="lv lv-${lv}">${lv}</span>
+            </div>`;
+          })
+          .join("");
+      }
+
+      // 서버를 바꾸면 그래프 기록을 비우고 새 서버 데이터로 다시 그림
+      function selectServer(id) {
+        if (id === selectedServerId) return;
+        selectedServerId = id;
+        clearWidgets("불러오는 중...");
+        renderServerTabs(serverList);
+        update();
+        updateProcs();
+        updateDisk();
+        updateTraffic();
+      }
+
+      // 그래프와 TOP5 위젯 비우기 (서버를 바꾸거나 보여줄 서버가 없을 때)
+      function clearWidgets(msg = "표시할 서버가 없습니다") {
+        history = { cpu: [], memory: [], disk: [], traffic: [] };
+        drawChart();
+        ["cpu-top", "mem-top", "disk-top", "traffic-top"].forEach((elId) => {
+          const el = document.getElementById(elId);
+          el.className = "nodata";
+          el.textContent = msg;
+        });
+      }
+
+      // 장비 현황: 서버별 대표 상태(가장 심각한 지표)를 집계
+      function updateCounts(list) {
+        const online = list.filter((s) => s.online);
+        const caution = online.filter((s) => s.level === "주의").length;
+        const danger = online.filter((s) => s.level === "위험").length;
+        const os = (s) => (s.os || "").toLowerCase();
+        const isLinux = (s) =>
+          /linux|rocky|ubuntu|centos|red hat|debian|fedora/.test(os(s));
+        const isWindows = (s) => os(s).includes("windows");
+        const isUnix = (s) => /aix|solaris|hp-ux|freebsd|mac/.test(os(s));
+        const set = (id, v) => (document.getElementById(id).textContent = v);
+        set("s-total", list.length);
+        set("s-caution", caution);
+        set("s-danger", danger);
+        set("s-down", list.length - online.length);
+        set("g-caution", caution);
+        set("g-danger", danger);
+        set("os-linux", list.filter(isLinux).length);
+        set("os-windows", list.filter(isWindows).length);
+        set("os-unix", list.filter(isUnix).length);
+        set(
+          "os-others",
+          list.filter((s) => !isLinux(s) && !isWindows(s) && !isUnix(s)).length,
+        );
+      }
+
+      // 선택한 서버의 API 주소
+      function api(path) {
+        return `/api/${path}?serverId=${selectedServerId}`;
+      }
+
+      async function update() {
+        if (selectedServerId === null) return;
+        const id = selectedServerId;
+        try {
+          const res = await fetch(api("status"));
+          if (!res.ok || id !== selectedServerId) return; // 응답 오는 사이 서버를 바꿨으면 버림
           const d = await res.json();
           // 각 지표 값 쌓기 (판정 결과에서 value 추출)
           pushVal("cpu", d.cpu.value);
           pushVal("memory", d.memory.value);
           pushVal("disk", d.disk.value);
           drawChart();
-
-          // 장비 현황 카운트: 이 서버 1대의 상태를 집계
-          let caution = 0,
-            danger = 0;
-          [d.cpu, d.memory, d.disk].forEach((m) => {
-            if (m.status === "위험") danger++;
-            else if (m.status === "주의") caution++;
-          });
-          // 가장 심각한 상태 하나로 이 장비 판정
-          const worst = danger > 0 ? "위험" : caution > 0 ? "주의" : "정상";
-          document.getElementById("s-caution").textContent =
-            worst === "주의" ? 1 : 0;
-          document.getElementById("s-danger").textContent =
-            worst === "위험" ? 1 : 0;
         } catch (e) {
           console.log(e);
         }
@@ -524,8 +707,10 @@
 
       // 프로세스 TOP5
       async function updateProcs() {
+        if (selectedServerId === null) return;
         try {
-          const res = await fetch("/api/procs");
+          const res = await fetch(api("procs"));
+          if (!res.ok) return;
           const list = await res.json();
           const cpuHtml = list
             .slice(0, 5)
@@ -534,9 +719,9 @@
                 `<div style="padding:4px 0;font-size:12px;">${p.name} <b style="float:right;color:#3f6ad8">${p.cpu.toFixed(1)}%</b></div>`,
             )
             .join("");
-          const memHtml = list
-            .slice(0, 5)
+          const memHtml = [...list]
             .sort((a, b) => b.mem - a.mem)
+            .slice(0, 5)
             .map(
               (p) =>
                 `<div style="padding:4px 0;font-size:12px;">${p.name} <b style="float:right;color:#3f6ad8">${p.mem.toFixed(1)}%</b></div>`,
@@ -555,8 +740,10 @@
 
       // 디스크 파티션별
       async function updateDisk() {
+        if (selectedServerId === null) return;
         try {
-          const res = await fetch("/api/disk");
+          const res = await fetch(api("disk"));
+          if (!res.ok) return;
           const list = await res.json();
           const html = list
             .map((d) => {
@@ -586,8 +773,11 @@
 
       // 트래픽 송수신
       async function updateTraffic() {
+        if (selectedServerId === null) return;
+        const id = selectedServerId;
         try {
-          const res = await fetch("/api/traffic");
+          const res = await fetch(api("traffic"));
+          if (!res.ok || id !== selectedServerId) return; // 응답 오는 사이 서버를 바꿨으면 버림
           const t = await res.json();
           // 차트용: 송신+수신 합계를 트래픽 시계열에 쌓기
           pushVal("traffic", t.sent + t.recv);
@@ -609,10 +799,11 @@
         }
       }
 
-      update();
-      updateProcs();
-      updateDisk();
-      updateTraffic();
+      // 서버 목록을 먼저 불러오면 첫 서버가 자동 선택되고 각 위젯이 채워짐
+      loadCompanies();
+      loadServers();
+      setInterval(loadServers, 2000);
+      setInterval(loadCompanies, 30000);
       setInterval(update, 2000);
       setInterval(updateProcs, 5000);
       setInterval(updateDisk, 5000);

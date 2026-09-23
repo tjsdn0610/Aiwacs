@@ -8,10 +8,11 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
-import com.sysone.aiwacs.monitor.MetricsService;
-import com.sysone.aiwacs.monitor.MetricsService.ProcInfo;
 import com.sysone.aiwacs.policy.PolicyService;
 import com.sysone.aiwacs.policy.PolicyService.ChangeResult;
+import com.sysone.aiwacs.server.AgentReport;
+import com.sysone.aiwacs.server.MonitoredServer;
+import com.sysone.aiwacs.server.ServerService;
 
 import tools.jackson.databind.JsonNode;
 
@@ -29,12 +30,12 @@ public class AiService {
 
     private final GeminiClient gemini;
     private final PolicyService policyService;
-    private final MetricsService metrics;
+    private final ServerService servers;
 
-    public AiService(GeminiClient gemini, PolicyService policyService, MetricsService metrics) {
+    public AiService(GeminiClient gemini, PolicyService policyService, ServerService servers) {
         this.gemini = gemini;
         this.policyService = policyService;
-        this.metrics = metrics;
+        this.servers = servers;
     }
 
     // ===== AI 임계치 변경 (기업+정책 지정, 여러 개 동시 가능) =====
@@ -145,27 +146,41 @@ public class AiService {
     }
 
     // ===== AI 상태 진단 + 원인 프로세스 유추 =====
-    public Map<String, Object> diagnose() {
+    public Map<String, Object> diagnose(Long serverId) {
         if (!gemini.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
 
-        // 1) 현재 상태 + 판정 수집 (판정은 코드가)
-        Map<String, Map<String, Object>> status = policyService.currentStatus();
+        // 0) 선택한 서버의 최신 지표 (Agent가 보낸 값)
+        MonitoredServer server = serverId == null ? null : servers.findById(serverId).orElse(null);
+        if (server == null) {
+            return Map.of("ok", false, "reply", "진단할 서버를 선택해 주세요.");
+        }
+        if (!servers.isOnline(serverId)) {
+            return Map.of("ok", false, "reply",
+                    "'" + server.label() + "' 서버가 오프라인 상태라 진단할 수 없습니다. Agent 실행 여부를 확인해 주세요.");
+        }
+        AgentReport report = servers.latest(serverId).orElseThrow().report();
+
+        // 1) 현재 상태 + 판정 (판정은 코드가)
+        Map<String, Map<String, Object>> status = servers.judge(serverId).orElseThrow();
 
         // 2) 프로세스 목록 (CPU/메모리 상위 5개)
-        List<ProcInfo> procs = metrics.processes();
-        List<Map<String, Object>> topCpu = procs.stream()
-                .sorted(Comparator.comparingDouble(ProcInfo::cpu).reversed()).limit(5)
+        List<Map<String, Object>> topCpu = report.procs().stream()
+                .sorted(Comparator.comparingDouble(AgentReport.Proc::cpu).reversed()).limit(5)
                 .map(p -> ordered("name", p.name(), "cpu", p.cpu())).toList();
-        List<Map<String, Object>> topMem = procs.stream()
-                .sorted(Comparator.comparingDouble(ProcInfo::mem).reversed()).limit(5)
+        List<Map<String, Object>> topMem = report.procs().stream()
+                .sorted(Comparator.comparingDouble(AgentReport.Proc::mem).reversed()).limit(5)
                 .map(p -> ordered("name", p.name(), "mem", p.mem())).toList();
 
-        // 2-1) 세부 지표 (AI 진단 정확도 향상용) + 1초간 측정한 I/O·페이지폴트 초당 값
-        Map<String, Object> detail = metrics.detailMetrics();
-        MetricsService.IoSample io = metrics.sampleIo();
-        detail.putAll(io.rates());
+        // 2-1) 세부 지표 + I/O·페이지폴트 초당 값 (AI 진단 정확도 향상용)
+        Map<String, Object> detail = new LinkedHashMap<>();
+        if (report.detail() != null) detail.putAll(report.detail());
+        if (report.io() != null) detail.putAll(report.io());
+        List<Map<String, Object>> topIo = report.topIo() != null ? report.topIo() : List.of();
+        Map<String, Object> serverInfo = ordered("name", server.label(), "os", server.getOs());
+        serverInfo.put("company", server.getCompany());
+        serverInfo.put("policy", servers.summary(server).get("policyName")); // 판정 기준이 된 정책
 
         // 3) Gemini에게 해석 요청
         String prompt = """
@@ -189,13 +204,16 @@ public class AiService {
                 [출력 형식]
                 {"level": "정상|주의|위험", "summary": "지금 무슨 일이 일어나는지 쉬운 말로 1~2문장", "correlation": "지표들이 어떻게 서로 영향을 주는지 인과관계를 화살표(→)로 표현하고 쉽게 설명", "causes": ["가능성 있는 원인1", "원인2"], "check": "직접 확인해볼 방법을 쉽게", "action": "권장 조치를 단계별로 쉽게"}
 
+                [서버 정보]
+                %s
+
                 [현재 상태 및 판정]
                 %s
 
                 [세부 지표]
                 %s
 
-                [세부 지표 설명] (_s로 끝나는 값은 방금 1초 동안 측정한 초당 값)
+                [세부 지표 설명] (_s로 끝나는 값은 최근 몇 초 동안 측정한 초당 값)
                 - disk_read_mb_s / disk_write_mb_s: 디스크 읽기/쓰기 속도(MB/s)
                 - disk_busy_percent: 가장 바쁜 디스크가 작업 중이던 시간 비율. 높으면 디스크 병목 가능성
                 - disk_queue_length: 디스크 작업 대기열 길이. 계속 1 이상이면 작업이 밀리는 중
@@ -210,8 +228,8 @@ public class AiService {
                 %s
 
                 [디스크 I/O 상위 프로세스] (io_kb_s: 읽기+쓰기 KB/s, major_faults_s: 해당 프로세스의 major 폴트/초)
-                %s""".formatted(gemini.toJson(status), gemini.toJson(detail),
-                gemini.toJson(topCpu), gemini.toJson(topMem), gemini.toJson(io.topIo()));
+                %s""".formatted(gemini.toJson(serverInfo), gemini.toJson(status), gemini.toJson(detail),
+                gemini.toJson(topCpu), gemini.toJson(topMem), gemini.toJson(topIo));
 
         JsonNode result;
         try {
@@ -224,7 +242,7 @@ public class AiService {
                     + msg.substring(0, Math.min(200, msg.length())));
         }
 
-        return Map.of("ok", true, "status", status, "diagnosis", result);
+        return Map.of("ok", true, "server", server.label(), "status", status, "diagnosis", result);
     }
 
     private static Map<String, Object> ordered(String k1, Object v1, String k2, Object v2) {

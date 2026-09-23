@@ -10,7 +10,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.sysone.aiwacs.monitor.MetricsService;
+import com.sysone.aiwacs.server.ServerRepository;
 
 /**
  * 알림 정책 관리 + 임계치 판정.
@@ -20,11 +20,11 @@ import com.sysone.aiwacs.monitor.MetricsService;
 public class PolicyService {
 
     private final PolicyRepository repository;
-    private final MetricsService metrics;
+    private final ServerRepository serverRepository;
 
-    public PolicyService(PolicyRepository repository, MetricsService metrics) {
+    public PolicyService(PolicyRepository repository, ServerRepository serverRepository) {
         this.repository = repository;
-        this.metrics = metrics;
+        this.serverRepository = serverRepository;
     }
 
     /** 처음 실행 시(정책이 하나도 없을 때) 샘플 정책 생성 */
@@ -75,6 +75,7 @@ public class PolicyService {
         if (!repository.existsById(id)) {
             return 0;
         }
+        serverRepository.clearPolicy(id); // 이 정책을 쓰던 서버는 기본 정책으로
         repository.deleteById(id);
         return 1;
     }
@@ -120,9 +121,42 @@ public class PolicyService {
                 + METRIC_KR.get(metric) + " " + LEVEL_KR.get(level) + " " + old + "% → " + value + "%");
     }
 
-    /** 메인 대시보드는 "대표 정책"(첫 번째)으로 판정 (현재 실제 서버 1대 기준) */
-    public Optional<Policy> activePolicy() {
+    /** 기본 정책 = 첫 번째 정책 (정책을 지정하지 않은 서버에 적용) */
+    public Optional<Policy> defaultPolicy() {
         return repository.findFirstByOrderByIdAsc();
+    }
+
+    public Optional<Policy> findById(Long id) {
+        return repository.findById(id);
+    }
+
+    /**
+     * 서버에 적용할 정책.
+     * 1) 지정한 정책이 있으면 그 정책
+     * 2) 없으면 그 서버 고객사의 첫 번째 정책
+     * 3) 고객사가 없거나 고객사 정책이 없으면 전체 첫 번째 정책
+     */
+    public Optional<Policy> policyFor(Long policyId, String company) {
+        if (policyId != null) {
+            Optional<Policy> assigned = repository.findById(policyId);
+            if (assigned.isPresent()) {
+                return assigned;
+            }
+        }
+        if (company != null) {
+            Optional<Policy> companyDefault = findAll().stream()
+                    .filter(p -> company.equals(p.getCompany()))
+                    .findFirst();
+            if (companyDefault.isPresent()) {
+                return companyDefault;
+            }
+        }
+        return defaultPolicy();
+    }
+
+    /** 고객사 목록 (정책에 등록된 고객사, 등록 순) */
+    public List<String> companies() {
+        return findAll().stream().map(Policy::getCompany).distinct().toList();
     }
 
     public static String judge(double value, Threshold th) {
@@ -131,15 +165,25 @@ public class PolicyService {
         return "정상";
     }
 
-    /** 현재 CPU/메모리/디스크 값 + 대표 정책 기준 판정 결과 */
-    public Map<String, Map<String, Object>> currentStatus() {
-        Policy pol = activePolicy().orElse(null);
+    private static final List<String> CORE_METRICS = List.of("cpu", "memory", "disk");
+
+    /** 서버가 보낸 CPU/메모리/디스크 값을 주어진 정책으로 판정 (정책이 없으면 모두 정상) */
+    public Map<String, Map<String, Object>> judgeAll(Map<String, Double> core, Policy pol) {
         Map<String, Map<String, Object>> result = new LinkedHashMap<>();
-        metrics.coreMetrics().forEach((key, value) -> {
+        for (String key : CORE_METRICS) {
+            double value = core.getOrDefault(key, 0.0);
             String status = pol != null ? judge(value, pol.threshold(key)) : "정상";
-            result.put(key, Map.of("value", MetricsService.round1(value), "status", status));
-        });
+            result.put(key, Map.of("value", Math.round(value * 10) / 10.0, "status", status));
+        }
         return result;
+    }
+
+    /** 판정 결과 중 가장 심각한 상태 (서버 한 대의 대표 상태) */
+    public static String worst(Map<String, Map<String, Object>> judged) {
+        List<Object> statuses = judged.values().stream().map(m -> m.get("status")).toList();
+        if (statuses.contains("위험")) return "위험";
+        if (statuses.contains("주의")) return "주의";
+        return "정상";
     }
 
     private static String orDefault(String v, String def) {

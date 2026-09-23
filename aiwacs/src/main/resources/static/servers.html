@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AiWACS - 알림 정책</title>
+    <title>AiWACS - 장비 목록</title>
     <style>
       * {
         margin: 0;
@@ -153,6 +153,36 @@
         color: #b0b6c4;
         padding: 40px;
       }
+      .section-title {
+        margin: 28px 0 10px;
+        font-weight: 700;
+        color: #3a3f52;
+        font-size: 14px;
+      }
+      .section-sub {
+        font-weight: 400;
+        font-size: 12px;
+        color: #9098aa;
+      }
+      .policy-select {
+        padding: 5px 8px;
+        border: 1px solid #e3e6ec;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #3a3f52;
+        min-width: 220px;
+      }
+      .on-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #b0b6c4;
+        margin-right: 6px;
+      }
+      .on-dot.on {
+        background: #2e9e52;
+      }
       .company-tag {
         background: #eaf0fb;
         color: #3f6ad8;
@@ -295,6 +325,31 @@
       .toast.show {
         opacity: 1;
       }
+      .menu-item.active {
+        background: #3f6ad8;
+        color: #fff;
+        font-weight: 600;
+      }
+      .form-row select {
+        flex: 1;
+        padding: 8px 10px;
+        border: 1px solid #d5d9e2;
+        border-radius: 4px;
+        font-size: 13px;
+        background: #fff;
+      }
+      .form-hint {
+        margin: -8px 0 14px 90px;
+        font-size: 11px;
+        color: #9098aa;
+      }
+      .agent-id {
+        font-size: 11px;
+        color: #9098aa;
+      }
+      .muted {
+        color: #b0b6c4;
+      }
     </style>
   </head>
   <body>
@@ -305,7 +360,7 @@
         </div>
         <div class="menu">
           <div class="menu-item"><a href="/">대시보드</a></div>
-          <div class="menu-item"><a href="/servers">장비 목록</a></div>
+          <div class="menu-item active">장비 목록</div>
           <div class="menu-item">ICMP</div>
           <div class="menu-item">프로세스</div>
           <div class="menu-item">추적</div>
@@ -314,7 +369,7 @@
           <div class="menu-item">알림</div>
           <div class="menu-item"><a href="/ai">AI 운영 도우미</a></div>
           <div class="menu-cat">정책 관리</div>
-          <div class="menu-item sub active">알림 정책</div>
+          <div class="menu-item sub"><a href="/policy">알림 정책</a></div>
           <div class="menu-item sub">보고서 정책</div>
           <div class="menu-item sub">경로 추적 정책</div>
           <div class="menu-item">그룹 설정</div>
@@ -324,25 +379,28 @@
 
       <div class="main">
         <div class="topbar">
-          <div class="breadcrumb">홈 &gt; 정책 관리 &gt; <b>알림 정책</b></div>
+          <div class="breadcrumb">홈 &gt; <b>장비 목록</b></div>
           <div class="topbar-right"><b>aiwacs</b>님, 환영합니다.</div>
         </div>
         <div class="content">
-          <div class="toolbar">
-            <button class="btn btn-primary" onclick="openAdd()">추가</button>
+          <div class="section-title" style="margin-top: 0">
+            모니터링 장비
+            <span class="section-sub"
+              >— Agent를 실행한 서버가 자동으로 등록됩니다. 고객사와 알림 정책을 지정해 주세요</span
+            >
           </div>
           <table class="table">
             <thead>
               <tr>
+                <th>상태</th>
+                <th>장비 이름</th>
                 <th>고객사</th>
-                <th>정책 명</th>
-                <th>CPU (주의/위험)</th>
-                <th>메모리 (주의/위험)</th>
-                <th>디스크 (주의/위험)</th>
-                <th style="width: 120px">관리</th>
+                <th>적용 정책</th>
+                <th>OS / IP</th>
+                <th style="width: 80px">관리</th>
               </tr>
             </thead>
-            <tbody id="policy-list">
+            <tbody id="server-list">
               <tr>
                 <td colspan="6" class="empty">불러오는 중...</td>
               </tr>
@@ -352,83 +410,36 @@
       </div>
     </div>
 
-    <!-- 추가/수정 모달 -->
+    <!-- 장비 수정 모달 -->
     <div class="modal-bg" id="modal">
       <div class="modal">
         <div class="modal-head">
-          <h3 id="modal-title">알림 정책 추가</h3>
+          <h3>장비 정보 수정</h3>
           <button class="close" onclick="closeModal()">&times;</button>
         </div>
         <div class="modal-body">
           <input type="hidden" id="edit-id" value="" />
           <div class="form-row">
-            <label>고객사</label>
-            <input type="text" id="f-company" placeholder="예: 테라넷" />
+            <label>Agent ID</label>
+            <span id="f-agent" class="agent-id"></span>
           </div>
           <div class="form-row">
-            <label>정책 명</label>
-            <input type="text" id="f-name" placeholder="예: DB서버 정책" />
+            <label>장비 이름</label>
+            <input type="text" id="f-name" maxlength="50" placeholder="예: 테라넷-DB01" />
           </div>
-          <div class="metric-block">
-            <div class="metric-head">CPU (%)</div>
-            <div class="th-row">
-              <div class="th-item">
-                <span class="dot warn"></span><label>주의</label
-                ><input type="number" id="cpu-warn" value="70" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-              <div class="th-item">
-                <span class="dot danger"></span><label>위험</label
-                ><input type="number" id="cpu-danger" value="90" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-            </div>
+          <div class="form-hint">비워두면 Agent ID로 표시됩니다</div>
+          <div class="form-row">
+            <label>고객사</label>
+            <select id="f-company" onchange="fillPolicyOptions(this.value, '')"></select>
           </div>
-          <div class="metric-block">
-            <div class="metric-head">Memory (%)</div>
-            <div class="th-row">
-              <div class="th-item">
-                <span class="dot warn"></span><label>주의</label
-                ><input type="number" id="memory-warn" value="80" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-              <div class="th-item">
-                <span class="dot danger"></span><label>위험</label
-                ><input type="number" id="memory-danger" value="90" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-            </div>
+          <div class="form-row">
+            <label>적용 정책</label>
+            <select id="f-policy"></select>
           </div>
-          <div class="metric-block">
-            <div class="metric-head">Disk (%)</div>
-            <div class="th-row">
-              <div class="th-item">
-                <span class="dot warn"></span><label>주의</label
-                ><input type="number" id="disk-warn" value="80" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-              <div class="th-item">
-                <span class="dot danger"></span><label>위험</label
-                ><input type="number" id="disk-danger" value="95" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-            </div>
-          </div>
+          <div class="form-hint">선택한 고객사의 정책만 지정할 수 있습니다</div>
         </div>
         <div class="modal-foot">
-          <button class="btn btn-primary" onclick="savePolicy()">저장</button>
+          <button class="btn btn-primary" onclick="saveServer()">저장</button>
           <button class="btn btn-gray" onclick="closeModal()">취소</button>
         </div>
       </div>
@@ -436,107 +447,100 @@
     <div class="toast" id="toast"></div>
 
     <script>
-      async function loadList() {
-        const res = await fetch("/api/policies");
-        const data = await res.json();
-        const tbody = document.getElementById("policy-list");
-        if (!data.policies.length) {
+      let servers = [];
+      let policies = [];
+      let companies = [];
+
+      async function loadAll() {
+        try {
+          const [s, p, c] = await Promise.all([
+            fetch("/api/servers").then((r) => r.json()),
+            fetch("/api/policies").then((r) => r.json()),
+            fetch("/api/companies").then((r) => r.json()),
+          ]);
+          servers = s;
+          policies = p.policies;
+          companies = c;
+          renderList();
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      function renderList() {
+        const tbody = document.getElementById("server-list");
+        if (!servers.length) {
           tbody.innerHTML =
-            '<tr><td colspan="6" class="empty">등록된 정책이 없습니다.</td></tr>';
+            '<tr><td colspan="6" class="empty">연결된 장비가 없습니다. 모니터링할 서버에서 Agent를 실행해 주세요.</td></tr>';
           return;
         }
-        tbody.innerHTML = data.policies
+        tbody.innerHTML = servers
           .map(
-            (p) => `
+            (s) => `
       <tr>
-        <td><span class="company-tag">${p.company}</span></td>
-        <td>${p.name}</td>
-        <td>${p.cpu.warn}% / ${p.cpu.danger}%</td>
-        <td>${p.memory.warn}% / ${p.memory.danger}%</td>
-        <td>${p.disk.warn}% / ${p.disk.danger}%</td>
-        <td>
-          <span class="link" onclick='openEdit(${JSON.stringify(p)})'>수정</span> &nbsp;
-          <span class="del-link" onclick="delPolicy(${p.id})">삭제</span>
-        </td>
+        <td><span class="on-dot ${s.online ? "on" : ""}"></span>${s.online ? "온라인" : "오프라인"}</td>
+        <td><b>${s.name}</b>${s.displayName ? `<div class="agent-id">Agent ID: ${s.agentName}</div>` : ""}</td>
+        <td>${s.company ? `<span class="company-tag">${s.company}</span>` : '<span class="muted">미지정</span>'}</td>
+        <td>${s.policyName || '<span class="muted">-</span>'}</td>
+        <td>${s.os || "-"} / ${s.ip || "-"}</td>
+        <td><span class="link" onclick="openEdit(${s.id})">수정</span></td>
       </tr>`,
           )
           .join("");
       }
 
-      function openAdd() {
-        document.getElementById("modal-title").textContent = "알림 정책 추가";
-        document.getElementById("edit-id").value = "";
-        document.getElementById("f-company").value = "";
-        document.getElementById("f-name").value = "";
-        document.getElementById("cpu-warn").value = 70;
-        document.getElementById("cpu-danger").value = 90;
-        document.getElementById("memory-warn").value = 80;
-        document.getElementById("memory-danger").value = 90;
-        document.getElementById("disk-warn").value = 80;
-        document.getElementById("disk-danger").value = 95;
+      function openEdit(id) {
+        const s = servers.find((x) => x.id === id);
+        document.getElementById("edit-id").value = s.id;
+        document.getElementById("f-agent").textContent = s.agentName;
+        document.getElementById("f-name").value = s.displayName || "";
+        document.getElementById("f-company").innerHTML =
+          '<option value="">미지정</option>' +
+          companies
+            .map((c) => `<option value="${c}" ${c === s.company ? "selected" : ""}>${c}</option>`)
+            .join("");
+        fillPolicyOptions(s.company || "", s.policyId);
         document.getElementById("modal").classList.add("show");
       }
 
-      function openEdit(p) {
-        document.getElementById("modal-title").textContent = "알림 정책 수정";
-        document.getElementById("edit-id").value = p.id;
-        document.getElementById("f-company").value = p.company;
-        document.getElementById("f-name").value = p.name;
-        document.getElementById("cpu-warn").value = p.cpu.warn;
-        document.getElementById("cpu-danger").value = p.cpu.danger;
-        document.getElementById("memory-warn").value = p.memory.warn;
-        document.getElementById("memory-danger").value = p.memory.danger;
-        document.getElementById("disk-warn").value = p.disk.warn;
-        document.getElementById("disk-danger").value = p.disk.danger;
-        document.getElementById("modal").classList.add("show");
+      // 고객사를 고르면 그 고객사의 정책만 선택지로 보여줌
+      function fillPolicyOptions(company, selectedId) {
+        const list = company ? policies.filter((p) => p.company === company) : policies;
+        const def = list[0] || policies[0];
+        const defLabel = def ? `[${def.company}] ${def.name}` : "없음";
+        document.getElementById("f-policy").innerHTML =
+          `<option value="">기본 정책 — ${defLabel}</option>` +
+          list
+            .map(
+              (p) =>
+                `<option value="${p.id}" ${p.id === selectedId ? "selected" : ""}>[${p.company}] ${p.name}</option>`,
+            )
+            .join("");
       }
 
       function closeModal() {
         document.getElementById("modal").classList.remove("show");
       }
 
-      async function savePolicy() {
+      async function saveServer() {
         const id = document.getElementById("edit-id").value;
-        const body = {
-          company: document.getElementById("f-company").value || "미지정",
-          name: document.getElementById("f-name").value || "새 정책",
-          cpu: {
-            warn: +document.getElementById("cpu-warn").value,
-            danger: +document.getElementById("cpu-danger").value,
-          },
-          memory: {
-            warn: +document.getElementById("memory-warn").value,
-            danger: +document.getElementById("memory-danger").value,
-          },
-          disk: {
-            warn: +document.getElementById("disk-warn").value,
-            danger: +document.getElementById("disk-danger").value,
-          },
-        };
-        if (id) {
-          await fetch("/api/policies/" + id, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          showToast("정책이 수정되었습니다");
-        } else {
-          await fetch("/api/policies", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          showToast("정책이 추가되었습니다");
+        const res = await fetch("/api/servers/" + id, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName: document.getElementById("f-name").value,
+            company: document.getElementById("f-company").value || null,
+            policyId: document.getElementById("f-policy").value || null,
+          }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          showToast(data.error || "저장에 실패했습니다");
+          return;
         }
+        showToast("장비 정보가 수정되었습니다");
         closeModal();
-        loadList();
-      }
-
-      async function delPolicy(id) {
-        if (!confirm("이 정책을 삭제하시겠습니까?")) return;
-        await fetch("/api/policies/" + id, { method: "DELETE" });
-        showToast("정책이 삭제되었습니다");
-        loadList();
+        loadAll();
       }
 
       function showToast(msg) {
@@ -546,7 +550,16 @@
         setTimeout(() => t.classList.remove("show"), 2000);
       }
 
-      loadList();
+      loadAll();
+      // 온라인 상태 갱신 (모달이 열려 있을 땐 목록만 새로 그림)
+      setInterval(async () => {
+        try {
+          servers = await (await fetch("/api/servers")).json();
+          renderList();
+        } catch (e) {
+          console.log(e);
+        }
+      }, 5000);
     </script>
   </body>
 </html>

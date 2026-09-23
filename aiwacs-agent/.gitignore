@@ -1,0 +1,5 @@
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+# 실제 설정 (토큰이 들어갈 수 있음) — 예시 파일만 올린다
+agent.properties

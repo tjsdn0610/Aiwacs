@@ -25,7 +25,14 @@ public class AiController {
     }
 
     @PostMapping("/diagnose")
-    public Map<String, Object> diagnose() {
-        return aiService.diagnose();
+    public Map<String, Object> diagnose(@RequestBody Map<String, Object> body) {
+        Object id = body.get("serverId");
+        Long serverId = null;
+        try {
+            serverId = id == null ? null : Long.valueOf(String.valueOf(id));
+        } catch (NumberFormatException ignored) {
+            // 잘못된 값이면 null → "서버를 선택해 주세요" 안내
+        }
+        return aiService.diagnose(serverId);
     }
 }

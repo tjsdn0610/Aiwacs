@@ -20,63 +20,95 @@
 
 - **백엔드**: Java 25 + Spring Boot 4.1.1 (Maven Wrapper `./mvnw`, Jackson 3 = `tools.jackson` 패키지)
 - **프론트엔드**: HTML + CSS + JavaScript (Vanilla)
-- **시스템 지표 수집**: OSHI 7.6.1
+- **시스템 지표 수집**: OSHI 7.6.1 — **Agent(`aiwacs-agent/`)에서만** 사용. 본체는 직접 측정하지 않음
 - **AI**: Google Gemini REST API (모델: `gemini-3.6-flash`, Spring RestClient로 호출)
-- **DB**: PostgreSQL 17 (회사 스택, Docker로 실행, 정책은 `alert_policy` 테이블)
+- **DB**: PostgreSQL 17 (회사 스택, Docker로 실행). 테이블: `alert_policy`(정책), `monitored_server`(서버)
 - **API 키**: `aiwacs/.env` (gitignore) → `spring.config.import`로 읽음
 - **개발 도구**: VSCode (자바 확장) + 저(Claude)와 바이브 코딩
 
-### 프로젝트 구조 (`aiwacs/`)
+### 전체 구조
 ```
+[모니터링 대상 VM (Rocky Linux 9)]            [맥: AiWACS 본체]
+ └─ aiwacs-agent.jar ── 2초마다 지표 전송 ─→  /api/agent/metrics → 서버 자동 등록(DB) + 최신 지표(메모리)
+                                              → 대시보드 / 장비 목록 / 알림정책 / AI 운영 도우미
+```
+- 모니터링 대상은 **VM 2대**(Agent 설치). 맥은 AiWACS 본체만 실행하고 모니터링 대상에서 제외
+
+### 프로젝트 구조
+```
+aiwacs/  (본체, Spring Boot)
 src/main/java/com/sysone/aiwacs/
-├── monitor/  MetricsService(OSHI 수집), MonitorController(/api/status·procs·disk·traffic)
-├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·임계치 변경), PolicyController(/api/policies)
+├── server/   AgentReport, MonitoredServer(엔티티), ServerService(수신·판정·서버 수정), ServerController(/api/agent/metrics, /api/servers, /api/companies)
+├── monitor/  MonitorController(/api/status·procs·disk·traffic ?serverId=)
+├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·서버별 정책 결정·임계치 변경), PolicyController(/api/policies)
 ├── ai/       GeminiClient(호출·JSON 추출·재시도), AiService(프롬프트), AiController(/api/ai/*)
-└── config/   WebConfig (/policy, /ai 화면 주소 연결)
-src/main/resources/static/  index.html, policy.html, ai.html
+└── config/   WebConfig (/policy, /ai, /servers 화면 주소 연결)
+src/main/resources/static/  index.html, servers.html, policy.html, ai.html
 docker-compose.yml           PostgreSQL (볼륨 이름 `aiwacs-pgdata`로 고정)
+
+aiwacs-agent/  (모니터링 대상 서버에 설치, Java 17+, Spring 없음)
+├── Collector.java    OSHI 수집. 변화량 지표는 직전 전송 이후 초당 값
+├── AgentMain.java    주기 전송, 끊겨도 재시도, 상태가 바뀔 때만 로그
+└── AgentConfig.java  agent.properties / 환경변수 (server.url, server.name, agent.token, interval.sec)
 ```
 - API 응답 JSON 모양은 프론트(static HTML)가 기대하는 형식을 유지한다. 바꾸면 화면도 함께 수정해야 함.
 
 ### 실행 방법
 ```bash
+# 본체 (맥)
 cd aiwacs
 docker compose up -d      # DB 켜기 (Docker Desktop 필요)
 ./mvnw spring-boot:run    # http://localhost:8080
+
+# Agent 빌드 (맥) → aiwacs-agent/target/aiwacs-agent.jar 를 VM으로 복사
+cd aiwacs-agent && ./mvnw package
+
+# VM (Rocky 9, root)
+dnf install -y java-21-openjdk-headless
+cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.properties
 ```
+- **네트워크 주의**: 집 공유기 와이파이는 기기 간 통신 차단(AP 격리) → **휴대폰 핫스팟**으로 맥·윈도우(VM 호스트) 연결. VirtualBox 네트워크는 **브리지**. 맥 IP가 바뀌면 `agent.properties`의 `server.url` 수정 필요
 
 ---
 
 ## 3. 기능 명세
 
-### 화면 3개
+### 화면 4개
 1. **메인 대시보드** — VM 실시간 모니터링 (AiWACS 스타일 재현)
-   - CPU/메모리/디스크 현재값 + 임계치 판정(정상/주의/위험)
-   - Resource Map (CPU/MEMORY/DISK/TRAFFIC 탭 전환 그래프)
-   - 프로세스 TOP5, 디스크 파티션별, 트래픽 송수신
-2. **알림정책** — 임계치 설정 (여러 정책 + 기업명 + CRUD)
-   - 고객사 + 정책명 + CPU/메모리/디스크 주의·위험 임계치
-3. **AI 운영 도우미** — 탭 2개
-   - **AI 상태 진단**: 현재 상태+세부지표+프로세스를 AI가 해석
+   - 상단 `Company ▾`로 고객사 필터, "모니터링 서버" 탭으로 서버 선택 (온라인 점 + 대표 상태)
+   - 장비 현황(전체/주의/위험/다운, OS별) = 서버 목록 기준 집계
+   - 선택 서버의 CPU/메모리/디스크 판정, Resource Map, 프로세스 TOP5, 디스크 파티션, 트래픽
+2. **장비 목록** (`/servers`) — Agent가 자동 등록한 서버 관리
+   - 장비 이름(표시 이름) 변경, 고객사 지정, 적용 정책 지정 (그 고객사의 정책만 선택 가능)
+   - Agent ID(`agent.properties`의 server.name)는 서버 식별용으로 유지, 화면 이름만 따로 변경
+3. **알림정책** — 임계치 설정 (여러 정책 + 고객사 + CRUD). 고객사 목록은 정책의 고객사에서 가져옴
+4. **AI 운영 도우미** — 탭 2개
+   - **AI 상태 진단**: 서버 선택 → 그 서버의 상태+세부지표+프로세스를 AI가 해석 (오프라인 서버는 진단 불가)
    - **AI 임계치 설정**: 자연어로 정책 임계치 변경 (여러 개 동시 가능)
 
+### 판정 기준 (서버별)
+- 서버에 지정한 정책 → 없으면 **그 서버 고객사의 첫 번째 정책** → 고객사도 없으면 전체 첫 번째 정책
+- 정책을 삭제하면 그 정책을 쓰던 서버는 자동으로 기본 정책으로
+- 오프라인(10초간 수신 없음) 서버는 판정하지 않음
+
 ### 완성 상태
-- [x] 메인 대시보드 (실시간)
-- [x] 알림정책 (여러 개 + 기업명 + CRUD)
+- [x] 메인 대시보드 (실시간, 서버 선택, 고객사 필터)
+- [x] 알림정책 (여러 개 + 고객사 + CRUD)
 - [x] 임계치 → 판정 연결
 - [x] AI 임계치 변경 (자연어, 여러 개 동시)
-- [x] AI 상태 진단 (세부지표 활용)
+- [x] AI 상태 진단 (세부지표 활용, 서버별)
+- [x] VM Agent (여러 서버 모니터링, 자동 등록, 토큰 옵션)
+- [x] 정책-서버 매칭 (고객사 → 서버 → 정책), 장비 이름 변경
 - [ ] AI 조치 실행 (프로세스 끄기/재시작 등) — 예정
-- [ ] VM Agent (여러 서버 모니터링) — 예정
-- [ ] 정책-서버 매칭 — 예정
+- [ ] Agent 자동 실행(systemd 서비스), Agent 로그 영어화(VM 콘솔 한글 깨짐) — 예정
 
-### 세부 지표 (진단 정확도용, OSHI로 수집)
+### 세부 지표 (진단 정확도용, Agent가 OSHI로 수집)
 - CPU: 사용률, 코어수, Load Average, Context Switch
 - 메모리: 사용률, Cached, Buffers, Available, Swap, 스왑 page-in/out(초당), Major/Minor 페이지폴트(초당)
 - 디스크: 사용률, I/O 읽기/쓰기(MB/s), busy 비율, 대기열 길이
 - 프로세스: CPU 상위, 메모리 상위, 디스크 I/O 상위(프로세스별 major 폴트 포함)
 - ※ Cached/Buffers는 리눅스 전용 개념이라 `/proc/meminfo`가 있을 때만 수집 (macOS에선 생략)
-- ※ I/O·페이지폴트는 누적값이 아니라 진단 시점에 **1초간 측정한 초당 값** (`MetricsService.sampleIo`)
+- ※ I/O·페이지폴트·CPU·트래픽은 누적값이 아니라 **Agent 직전 전송 이후(기본 2초)의 초당 값** (`Collector.collect`)
 - ※ 프롬프트에 각 지표의 뜻을 설명하고, "근거 수치를 함께 언급 / 수치가 낮으면 '뚜렷하지 않다'고 말할 것"을 규칙으로 둠
 
 ### 안정성 보완 사항
@@ -121,7 +153,8 @@ docker compose up -d      # DB 켜기 (Docker Desktop 필요)
 
 - **"왜 3개 지표만?"** → 핵심(CPU/메모리/디스크)에 집중, 확장 가능하게 설계
 - **"AI가 원인을 어떻게 아냐?"** → 단정 아님. 세부지표 근거로 "가능성+확인방법" 제시
-- **"DB/서버 여러 대는?"** → 정책은 이미 PostgreSQL에 저장. 현재 모니터링은 단일서버, Agent 추가로 확장 가능한 구조
+- **"서버 여러 대는?"** → Agent 방식. 새 서버는 Agent 설치만 하면 자동 등록 (VM 2대로 시연, 즉석에서 추가도 가능). 대규모는 목록/필터·그룹 정책·지표 이력 저장으로 확장
+- **"고객사별 관리는?"** → 고객사 → 서버 → 정책 구조. 서버는 자기 고객사의 정책으로만 판정, 대시보드 Company 필터
 - **"AI 서버가 멈추면?"** → 503/429 자동 재시도 + 사용자 안내. 판정은 코드가 하므로 AI 장애와 무관하게 대시보드는 정상 동작
 - **"실제 AiWACS와 연동은?"** → 권한상 독립 구현, API 열리면 연동 가능
 - **AI 활용 깊이** → 단순 호출이 아니라 프롬프트 설계(역할 부여, JSON 강제, 세부지표 근거)로 통제
@@ -130,5 +163,6 @@ docker compose up -d      # DB 켜기 (Docker Desktop 필요)
 
 ## 7. 현재 단계
 
-- **핵심 기능 구현 완료** (2026-09-23). 화면 3개 + API 10개 전부 동작 확인, GitHub 반영
-- 다음 할 일 (3장의 "예정" 항목): AI 조치 실행(승인 + 시뮬레이션 스위치) → VM Agent → 정책-서버 매칭
+- **VM Agent + 정책-서버 매칭 + 고객사 구조 구현** (2026-09-23). VM 1대(rocky-01) 실제 연결 확인
+- 사용자 결정: 심사자 피드백은 "하나만"이었지만 **VM 2대**로 시연하기로 함
+- 다음 할 일: 두 번째 VM 연결 → Agent 자동 실행(systemd) → (선택) AI 조치 실행

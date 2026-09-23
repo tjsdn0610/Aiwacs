@@ -1,0 +1,16 @@
+# AiWACS Agent 설정 예시
+# 이 파일을 agent.properties 로 복사한 뒤 값을 채우고, jar와 같은 폴더에서 실행한다.
+#   cp agent.properties.example agent.properties
+#   java -jar aiwacs-agent.jar
+
+# AiWACS가 실행 중인 컴퓨터의 주소 [필수]
+server.url=http://192.168.123.7:8080
+
+# 화면에 표시될 서버 이름 (비우면 호스트명 사용)
+server.name=web-server-01
+
+# AiWACS의 AGENT_TOKEN과 같은 값 (AiWACS에 토큰을 설정하지 않았다면 비워둠)
+agent.token=
+
+# 전송 주기(초)
+interval.sec=2
