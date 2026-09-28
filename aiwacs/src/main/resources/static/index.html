@@ -233,6 +233,23 @@
         color: #fff;
         border-color: #3f6ad8;
       }
+      .map-tabs .sep {
+        width: 10px;
+      }
+      .chart-foot {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #9aa1b2;
+        margin-top: 4px;
+        min-height: 14px;
+      }
+      .chart-caption {
+        font-size: 11px;
+        color: #9aa1b2;
+        margin-top: 2px;
+        text-align: right;
+      }
       .chart-area {
         height: 200px;
         position: relative;
@@ -245,6 +262,50 @@
       }
       .top5 {
         min-height: 150px;
+      }
+      /* 사용량 위젯: 세로 막대그래프 (항목 수에 따라 막대 너비가 자동으로 나뉨) */
+      .cols {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        height: 130px;
+        padding-top: 4px;
+      }
+      .col {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        height: 100%;
+      }
+      .col-val {
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        white-space: nowrap;
+      }
+      .col-track {
+        flex: 1;
+        display: flex;
+        align-items: flex-end;
+        border-bottom: 1px solid #e3e6ec;
+        margin-top: 2px;
+      }
+      .col-bar {
+        width: 100%;
+        min-height: 2px;
+        border-radius: 3px 3px 0 0;
+        transition: height 0.4s;
+      }
+      .col-name {
+        font-size: 11px;
+        color: #7a8194;
+        text-align: center;
+        margin-top: 4px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .nodata {
         display: flex;
@@ -464,6 +525,11 @@
                 <div class="map-tab" data-metric="memory">MEMORY</div>
                 <div class="map-tab" data-metric="disk">DISK</div>
                 <div class="map-tab" data-metric="traffic">TRAFFIC</div>
+                <div class="sep"></div>
+                <div class="map-tab active" data-range="live">실시간</div>
+                <div class="map-tab" data-range="60">1시간</div>
+                <div class="map-tab" data-range="360">6시간</div>
+                <div class="map-tab" data-range="1440">24시간</div>
               </div>
               <div class="chart-area">
                 <svg
@@ -474,6 +540,8 @@
                   preserveAspectRatio="none"
                 ></svg>
               </div>
+              <div class="chart-foot" id="chart-foot"></div>
+              <div class="chart-caption" id="chart-caption"></div>
             </div>
 
             <div class="top5-grid">
@@ -506,9 +574,12 @@
           new Date().toLocaleTimeString("ko-KR");
       }, 1000);
 
-      // 4개 지표 각각 시계열로 저장 (최근 40개)
+      // 실시간 그래프용: 4개 지표 각각 최근 40개 (AiWACS 본체가 보관한 값을 2초마다 받아옴)
       let history = { cpu: [], memory: [], disk: [], traffic: [] };
       let currentTab = "cpu"; // 현재 선택된 탭
+      // 그래프 기간: "live" = 2초마다 갱신되는 최근 80초 / 숫자 = 서버에 저장된 최근 N분의 1분 평균
+      let currentRange = "live";
+      let stored = []; // /api/history 결과 [{time, cpu, memory, disk, traffic}, ...]
 
       // ===== 모니터링 서버 (Agent가 연결된 서버 목록) =====
       let selectedServerId = null; // 지금 화면에 보여주는 서버
@@ -583,11 +654,13 @@
         updateProcs();
         updateDisk();
         updateTraffic();
+        loadHistory();
       }
 
       // 그래프와 TOP5 위젯 비우기 (서버를 바꾸거나 보여줄 서버가 없을 때)
       function clearWidgets(msg = "표시할 서버가 없습니다") {
         history = { cpu: [], memory: [], disk: [], traffic: [] };
+        stored = [];
         drawChart();
         ["cpu-top", "mem-top", "disk-top", "traffic-top"].forEach((elId) => {
           const el = document.getElementById(elId);
@@ -631,40 +704,122 @@
         if (selectedServerId === null) return;
         const id = selectedServerId;
         try {
-          const res = await fetch(api("status"));
+          // 본체가 서버별로 최근 약 80초 값을 들고 있으므로, 서버를 바꾸거나 화면을 다시 열어도 그래프가 바로 이어짐
+          const res = await fetch(`/api/history/recent?serverId=${id}`);
           if (!res.ok || id !== selectedServerId) return; // 응답 오는 사이 서버를 바꿨으면 버림
-          const d = await res.json();
-          // 각 지표 값 쌓기 (판정 결과에서 value 추출)
-          pushVal("cpu", d.cpu.value);
-          pushVal("memory", d.memory.value);
-          pushVal("disk", d.disk.value);
+          const list = await res.json();
+          history = {
+            cpu: list.map((p) => p.cpu),
+            memory: list.map((p) => p.memory),
+            disk: list.map((p) => p.disk),
+            traffic: list.map((p) => p.traffic),
+          };
+          if (currentRange === "live") drawChart();
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      // 저장된 이력 불러오기 (1분마다 새 평균이 생기므로 1분마다 다시 불러옴)
+      async function loadHistory() {
+        if (selectedServerId === null || currentRange === "live") return;
+        const id = selectedServerId;
+        const range = currentRange;
+        try {
+          const res = await fetch(`/api/history?serverId=${id}&minutes=${range}`);
+          if (!res.ok || id !== selectedServerId || range !== currentRange) return;
+          stored = await res.json();
           drawChart();
         } catch (e) {
           console.log(e);
         }
       }
 
-      function pushVal(key, val) {
-        history[key].push(val);
-        if (history[key].length > 40) history[key].shift();
-      }
+      const CHART_COLORS = {
+        cpu: "#3f6ad8",
+        memory: "#2e9e52",
+        disk: "#e0a020",
+        traffic: "#9b59b6",
+      };
 
       function drawChart() {
+        if (currentRange === "live") drawLiveChart();
+        else drawHistoryChart();
+      }
+
+      // 격자선 (가로 5칸)
+      function gridLines(W, H) {
+        let grid = "";
+        for (let i = 0; i <= 5; i++) {
+          const y = (i / 5) * H;
+          grid += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#eef0f4" stroke-width="1"/>`;
+        }
+        return grid;
+      }
+
+      // 저장된 이력 그래프: 가로축은 시간. 서버가 꺼져 있던 구간(2분 넘게 빈 곳)은 선을 끊는다
+      function drawHistoryChart() {
+        const svg = document.getElementById("chart");
+        const W = 800,
+          H = 200;
+        const minutes = Number(currentRange);
+        const end = Date.now();
+        const start = end - minutes * 60000;
+        const pts = stored.filter((p) => p.time >= start);
+        const vals = pts.map((p) => p[currentTab]);
+        const max = currentTab === "traffic" ? Math.max(10, ...vals) * 1.2 : 100;
+        const color = CHART_COLORS[currentTab];
+        const xy = (p) => [
+          (((p.time - start) / (end - start)) * W).toFixed(1),
+          (H - (p[currentTab] / max) * H).toFixed(1),
+        ];
+
+        // 연속된 구간끼리 묶기
+        const segments = [];
+        pts.forEach((p, i) => {
+          if (i === 0 || p.time - pts[i - 1].time > 2 * 60000) segments.push([]);
+          segments[segments.length - 1].push(p);
+        });
+
+        let lines = "";
+        segments.forEach((seg) => {
+          const coords = seg.map((p) => xy(p).join(",")).join(" ");
+          if (seg.length === 1) {
+            const [x, y] = xy(seg[0]);
+            lines += `<circle cx="${x}" cy="${y}" r="2" fill="${color}"/>`;
+            return;
+          }
+          const x0 = xy(seg[0])[0];
+          const x1 = xy(seg[seg.length - 1])[0];
+          lines += `<polyline points="${x0},${H} ${coords} ${x1},${H}" fill="${color}" opacity="0.08"/>`;
+          lines += `<polyline points="${coords}" fill="none" stroke="${color}" stroke-width="2"/>`;
+        });
+        svg.innerHTML = gridLines(W, H) + lines;
+
+        // 아래 시간 눈금 5개
+        const fmt = (t) =>
+          new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+        document.getElementById("chart-foot").innerHTML = [0, 1, 2, 3, 4]
+          .map((i) => `<span>${fmt(start + (i / 4) * (end - start))}</span>`)
+          .join("");
+        const unit = currentTab === "traffic" ? "KB/s" : "%";
+        const label = minutes >= 60 ? `${minutes / 60}시간` : `${minutes}분`;
+        document.getElementById("chart-caption").textContent = pts.length
+          ? `최근 ${label} · 1분 평균 (${unit}) · 기록 ${pts.length}개 · 최대 ${Math.max(...vals)}${unit}`
+          : `최근 ${label} 동안 저장된 기록이 없습니다 (1분마다 저장)`;
+      }
+
+      function drawLiveChart() {
         const svg = document.getElementById("chart");
         const W = 800,
           H = 200;
         const data = history[currentTab];
+        document.getElementById("chart-foot").innerHTML = "";
+        document.getElementById("chart-caption").textContent = "실시간 · 2초 간격 · 최근 80초";
         // 트래픽은 %가 아니라 KB/s라 스케일을 데이터 최대값 기준으로
         const max =
           currentTab === "traffic" ? Math.max(10, ...data) * 1.2 : 100;
-        // 색상: 지표별로 다르게
-        const colors = {
-          cpu: "#3f6ad8",
-          memory: "#2e9e52",
-          disk: "#e0a020",
-          traffic: "#9b59b6",
-        };
-        const color = colors[currentTab];
+        const color = CHART_COLORS[currentTab];
 
         let pts = data
           .map((v, i) => {
@@ -674,12 +829,7 @@
           })
           .join(" ");
 
-        // 격자 + Y축 라벨
-        let grid = "";
-        for (let i = 0; i <= 5; i++) {
-          const y = (i / 5) * H;
-          grid += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#eef0f4" stroke-width="1"/>`;
-        }
+        const grid = gridLines(W, H);
         // 채움 영역 (선 아래)
         let area = "";
         if (data.length > 1) {
@@ -694,16 +844,46 @@
       }
 
       // 탭 클릭 이벤트
-      document.querySelectorAll(".map-tab").forEach((tab) => {
+      document.querySelectorAll(".map-tab[data-metric]").forEach((tab) => {
         tab.addEventListener("click", () => {
           document
-            .querySelectorAll(".map-tab")
+            .querySelectorAll(".map-tab[data-metric]")
             .forEach((t) => t.classList.remove("active"));
           tab.classList.add("active");
           currentTab = tab.dataset.metric;
           drawChart();
         });
       });
+      // 기간 탭 (실시간 / 1시간 / 6시간 / 24시간)
+      document.querySelectorAll(".map-tab[data-range]").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document
+            .querySelectorAll(".map-tab[data-range]")
+            .forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          currentRange = tab.dataset.range;
+          stored = [];
+          drawChart();
+          if (currentRange === "live") update();
+          else loadHistory();
+        });
+      });
+
+      // 사용량 위젯: 세로 막대그래프. 항목이 적으면 막대가 넓고, 많아질수록 얇아짐
+      // items: [{name, value, color}] / 막대 높이 = value / max (100%를 넘지 않게)
+      function columnChart(items, unit, max = 100) {
+        if (!items.length) return '<div class="nodata">데이터가 없습니다</div>';
+        return `<div class="cols">${items
+          .map((it) => {
+            const h = Math.min(100, max > 0 ? (it.value / max) * 100 : 0);
+            return `<div class="col" title="${it.name}: ${it.value}${unit}">
+              <div class="col-val" style="color:${it.color}">${it.value}${unit}</div>
+              <div class="col-track"><div class="col-bar" style="background:${it.color};height:${h}%"></div></div>
+              <div class="col-name">${it.name}</div>
+            </div>`;
+          })
+          .join("")}</div>`;
+      }
 
       // 프로세스 TOP5
       async function updateProcs() {
@@ -712,21 +892,17 @@
           const res = await fetch(api("procs"));
           if (!res.ok) return;
           const list = await res.json();
-          const cpuHtml = list
-            .slice(0, 5)
-            .map(
-              (p) =>
-                `<div style="padding:4px 0;font-size:12px;">${p.name} <b style="float:right;color:#3f6ad8">${p.cpu.toFixed(1)}%</b></div>`,
-            )
-            .join("");
-          const memHtml = [...list]
-            .sort((a, b) => b.mem - a.mem)
-            .slice(0, 5)
-            .map(
-              (p) =>
-                `<div style="padding:4px 0;font-size:12px;">${p.name} <b style="float:right;color:#3f6ad8">${p.mem.toFixed(1)}%</b></div>`,
-            )
-            .join("");
+          const cpuHtml = columnChart(
+            list.slice(0, 5).map((p) => ({ name: p.name, value: p.cpu.toFixed(1), color: CHART_COLORS.cpu })),
+            "%",
+          );
+          const memHtml = columnChart(
+            [...list]
+              .sort((a, b) => b.mem - a.mem)
+              .slice(0, 5)
+              .map((p) => ({ name: p.name, value: p.mem.toFixed(1), color: CHART_COLORS.memory })),
+            "%",
+          );
           const c = document.getElementById("cpu-top");
           c.className = "";
           c.innerHTML = cpuHtml;
@@ -745,24 +921,18 @@
           const res = await fetch(api("disk"));
           if (!res.ok) return;
           const list = await res.json();
-          const html = list
-            .map((d) => {
+          const html = columnChart(
+            list.map((d) => {
               const color =
                 d.percent >= 90
                   ? "#d64545"
                   : d.percent >= 70
                     ? "#e0a020"
                     : "#3f6ad8";
-              return `<div style="padding:6px 0;font-size:12px;">
-          <div style="display:flex;justify-content:space-between;">
-            <span>${d.name}</span><b style="color:${color}">${d.percent}%</b>
-          </div>
-          <div style="background:#eef0f4;height:5px;border-radius:3px;margin-top:3px;">
-            <div style="background:${color};height:5px;border-radius:3px;width:${d.percent}%;"></div>
-          </div>
-        </div>`;
-            })
-            .join("");
+              return { name: d.name, value: d.percent, color };
+            }),
+            "%",
+          );
           const el = document.getElementById("disk-top");
           el.className = "";
           el.innerHTML = html;
@@ -779,18 +949,16 @@
           const res = await fetch(api("traffic"));
           if (!res.ok || id !== selectedServerId) return; // 응답 오는 사이 서버를 바꿨으면 버림
           const t = await res.json();
-          // 차트용: 송신+수신 합계를 트래픽 시계열에 쌓기
-          pushVal("traffic", t.sent + t.recv);
-          if (currentTab === "traffic") drawChart();
-          const html = `
-        <div style="padding:8px 0;font-size:13px;">
-          <div style="display:flex;justify-content:space-between;padding:6px 0;">
-            <span>▲ 송신</span><b style="color:#3f6ad8">${t.sent} KB/s</b>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:6px 0;">
-            <span>▼ 수신</span><b style="color:#2e9e52">${t.recv} KB/s</b>
-          </div>
-        </div>`;
+          // 트래픽은 %가 아니라서 둘 중 큰 값을 막대 끝(100%)으로 둠
+          const max = Math.max(t.sent, t.recv, 1);
+          const html = columnChart(
+            [
+              { name: "▲ 송신", value: t.sent, color: "#3f6ad8" },
+              { name: "▼ 수신", value: t.recv, color: "#2e9e52" },
+            ],
+            " KB/s",
+            max,
+          );
           const el = document.getElementById("traffic-top");
           el.className = "";
           el.innerHTML = html;
@@ -808,6 +976,7 @@
       setInterval(updateProcs, 5000);
       setInterval(updateDisk, 5000);
       setInterval(updateTraffic, 2000);
+      setInterval(loadHistory, 60000);
     </script>
   </body>
 </html>

@@ -12,12 +12,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.sysone.aiwacs.history.MetricHistoryService;
 import com.sysone.aiwacs.policy.Policy;
 import com.sysone.aiwacs.policy.PolicyService;
 
 /**
  * Agent가 보낸 지표를 받아 서버별 최신 상태를 보관한다.
  * 서버 목록은 DB에, 최신 지표는 메모리에 둔다 (몇 초마다 바뀌는 값이라 DB에 매번 쓰지 않음).
+ * 그래프 이력은 MetricHistoryService가 1분 평균으로 DB에 저장한다.
  */
 @Service
 public class ServerService {
@@ -29,11 +31,13 @@ public class ServerService {
 
     private final ServerRepository repository;
     private final PolicyService policyService;
+    private final MetricHistoryService history;
     private final Map<Long, Snapshot> latest = new ConcurrentHashMap<>();
 
-    public ServerService(ServerRepository repository, PolicyService policyService) {
+    public ServerService(ServerRepository repository, PolicyService policyService, MetricHistoryService history) {
         this.repository = repository;
         this.policyService = policyService;
+        this.history = history;
     }
 
     /** 서버의 최신 지표를 "그 서버에 적용된 정책"으로 판정 */
@@ -103,6 +107,7 @@ public class ServerService {
             server.setOs(report.os());
         }
         latest.put(server.getId(), new Snapshot(report, Instant.now()));
+        history.record(server.getId(), report);
         return server;
     }
 
