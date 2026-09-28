@@ -1,5 +1,6 @@
 package com.sysone.aiwacs.history;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -17,11 +18,17 @@ public class MetricHistoryController {
         this.service = service;
     }
 
-    /** 최근 minutes분의 1분 평균 이력. 예) /api/history?serverId=1&minutes=60 */
+    /** 그날 하루의 1분 평균 이력. 예) /api/history?serverId=1&date=2026-09-28 (date를 빼면 오늘) */
     @GetMapping("/api/history")
     public List<Map<String, Object>> history(@RequestParam Long serverId,
-                                             @RequestParam(defaultValue = "60") int minutes) {
-        return service.history(serverId, minutes);
+                                             @RequestParam(required = false) LocalDate date) {
+        return service.history(serverId, date != null ? date : LocalDate.now());
+    }
+
+    /** 이력을 볼 수 있는 날짜 목록 (오늘부터 보관 기간만큼, 최신 순) */
+    @GetMapping("/api/history/days")
+    public List<LocalDate> days() {
+        return service.days();
     }
 
     /** 실시간 그래프용 최근 약 80초의 원본 값. 화면을 새로 열거나 서버를 바꿀 때 그래프를 바로 채운다. */

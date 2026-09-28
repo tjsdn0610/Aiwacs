@@ -236,13 +236,65 @@
       .map-tabs .sep {
         width: 10px;
       }
-      .chart-foot {
-        display: flex;
-        justify-content: space-between;
+      .day-select {
         font-size: 11px;
+        padding: 2px 4px;
+        border: 1px solid #3f6ad8;
+        color: #3f6ad8;
+        background: #fff;
+        cursor: pointer;
+      }
+      /* 그래프: 왼쪽 Y축 눈금 + 오른쪽 그래프 */
+      .chart-wrap {
+        display: flex;
+        margin-top: 8px;
+      }
+      .y-axis {
+        position: relative;
+        width: 44px;
+        flex-shrink: 0;
+        font-size: 10px;
         color: #9aa1b2;
+      }
+      .y-axis span {
+        position: absolute;
+        right: 6px;
+        transform: translateY(-50%);
+        white-space: nowrap;
+      }
+      .chart-foot {
+        position: relative;
+        margin-left: 44px;
+        height: 16px;
         margin-top: 4px;
-        min-height: 14px;
+        font-size: 10px;
+        color: #9aa1b2;
+      }
+      .chart-foot span {
+        position: absolute;
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+      .hover-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: #9aa1b2;
+        pointer-events: none;
+        display: none;
+      }
+      .hover-tip {
+        position: absolute;
+        top: 4px;
+        padding: 3px 7px;
+        font-size: 11px;
+        background: #2f3445;
+        color: #fff;
+        border-radius: 3px;
+        white-space: nowrap;
+        pointer-events: none;
+        display: none;
       }
       .chart-caption {
         font-size: 11px;
@@ -251,9 +303,10 @@
         text-align: right;
       }
       .chart-area {
+        flex: 1;
+        min-width: 0;
         height: 200px;
         position: relative;
-        margin-top: 8px;
       }
       .top5-grid {
         display: grid;
@@ -526,19 +579,24 @@
                 <div class="map-tab" data-metric="disk">DISK</div>
                 <div class="map-tab" data-metric="traffic">TRAFFIC</div>
                 <div class="sep"></div>
-                <div class="map-tab active" data-range="live">실시간</div>
-                <div class="map-tab" data-range="60">1시간</div>
-                <div class="map-tab" data-range="360">6시간</div>
-                <div class="map-tab" data-range="1440">24시간</div>
+                <select class="day-select" id="day-select" onchange="changeRange(this.value)">
+                  <option value="today">오늘</option>
+                  <option value="live">실시간 (최근 80초)</option>
+                </select>
               </div>
-              <div class="chart-area">
-                <svg
-                  id="chart"
-                  width="100%"
-                  height="200"
-                  viewBox="0 0 800 200"
-                  preserveAspectRatio="none"
-                ></svg>
+              <div class="chart-wrap">
+                <div class="y-axis" id="y-axis"></div>
+                <div class="chart-area" id="chart-area">
+                  <svg
+                    id="chart"
+                    width="100%"
+                    height="200"
+                    viewBox="0 0 800 200"
+                    preserveAspectRatio="none"
+                  ></svg>
+                  <div class="hover-line" id="hover-line"></div>
+                  <div class="hover-tip" id="hover-tip"></div>
+                </div>
               </div>
               <div class="chart-foot" id="chart-foot"></div>
               <div class="chart-caption" id="chart-caption"></div>
@@ -577,9 +635,10 @@
       // 실시간 그래프용: 4개 지표 각각 최근 40개 (AiWACS 본체가 보관한 값을 2초마다 받아옴)
       let history = { cpu: [], memory: [], disk: [], traffic: [] };
       let currentTab = "cpu"; // 현재 선택된 탭
-      // 그래프 기간: "live" = 2초마다 갱신되는 최근 80초 / 숫자 = 서버에 저장된 최근 N분의 1분 평균
-      let currentRange = "live";
+      // 그래프 기간: "today" = 오늘 하루(1분 평균, 기본) / "YYYY-MM-DD" = 그날 하루 / "live" = 최근 80초(2초 간격)
+      let currentRange = "today";
       let stored = []; // /api/history 결과 [{time, cpu, memory, disk, traffic}, ...]
+      let storedDay = null; // stored가 어느 날짜의 기록인지 (그래프 가로축 00:00 기준)
 
       // ===== 모니터링 서버 (Agent가 연결된 서버 목록) =====
       let selectedServerId = null; // 지금 화면에 보여주는 서버
@@ -720,19 +779,63 @@
         }
       }
 
-      // 저장된 이력 불러오기 (1분마다 새 평균이 생기므로 1분마다 다시 불러옴)
+      // 날짜 선택 목록 (오늘 / 실시간 / 어제 / 그 이전 날짜들). 보관 기간만큼 본체가 알려줌
+      async function loadDays() {
+        try {
+          const days = await (await fetch("/api/history/days")).json();
+          const sel = document.getElementById("day-select");
+          const week = ["일", "월", "화", "수", "목", "금", "토"];
+          const label = (d, i) => {
+            const md = d.slice(5).replace("-", "/");
+            if (i === 0) return `오늘 (${md})`;
+            if (i === 1) return `어제 (${md})`;
+            return `${md} (${week[new Date(d + "T00:00").getDay()]})`;
+          };
+          sel.innerHTML =
+            `<option value="today">${label(days[0], 0)}</option>` +
+            '<option value="live">실시간 (최근 80초)</option>' +
+            days
+              .slice(1)
+              .map((d, i) => `<option value="${d}">${label(d, i + 1)}</option>`)
+              .join("");
+          // 선택했던 날짜가 보관 기간이 지나 목록에서 빠졌으면 오늘로
+          if (![...sel.options].some((o) => o.value === currentRange)) currentRange = "today";
+          sel.value = currentRange;
+        } catch (e) {
+          console.log(e);
+        }
+      }
+
+      function changeRange(value) {
+        currentRange = value;
+        stored = [];
+        drawChart();
+        if (currentRange === "live") update();
+        else loadHistory();
+      }
+
+      // 그날 하루의 기록 불러오기 (오늘이면 1분마다 새 평균이 생기므로 1분마다 다시 불러옴)
       async function loadHistory() {
         if (selectedServerId === null || currentRange === "live") return;
         const id = selectedServerId;
         const range = currentRange;
+        // "today"는 그때그때 오늘 날짜로 바꿔서 요청 (자정이 지나면 자동으로 다음 날로 넘어감)
+        const day = range === "today" ? localDate(new Date()) : range;
         try {
-          const res = await fetch(`/api/history?serverId=${id}&minutes=${range}`);
+          const res = await fetch(`/api/history?serverId=${id}&date=${day}`);
           if (!res.ok || id !== selectedServerId || range !== currentRange) return;
           stored = await res.json();
+          storedDay = day;
           drawChart();
         } catch (e) {
           console.log(e);
         }
+      }
+
+      // Date → "YYYY-MM-DD" (내 컴퓨터 시간 기준)
+      function localDate(d) {
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       }
 
       const CHART_COLORS = {
@@ -741,10 +844,12 @@
         disk: "#e0a020",
         traffic: "#9b59b6",
       };
+      const METRIC_NAMES = { cpu: "CPU", memory: "메모리", disk: "디스크", traffic: "트래픽" };
 
       function drawChart() {
+        hideHover();
         if (currentRange === "live") drawLiveChart();
-        else drawHistoryChart();
+        else drawDayChart();
       }
 
       // 격자선 (가로 5칸)
@@ -757,17 +862,34 @@
         return grid;
       }
 
-      // 저장된 이력 그래프: 가로축은 시간. 서버가 꺼져 있던 구간(2분 넘게 빈 곳)은 선을 끊는다
-      function drawHistoryChart() {
+      // 세로축 눈금: %는 0~100, 트래픽은 그래프 최대값 기준 KB/s
+      function drawYAxis(max) {
+        const unit = currentTab === "traffic" ? "" : "%";
+        document.getElementById("y-axis").innerHTML = [0, 1, 2, 3, 4, 5]
+          .map((i) => {
+            const v = (max * i) / 5;
+            const text = currentTab === "traffic" ? (v >= 100 ? Math.round(v) : v.toFixed(1)) : Math.round(v);
+            return `<span style="top:${100 - i * 20}%">${text}${unit}</span>`;
+          })
+          .join("") +
+          (currentTab === "traffic" ? '<span style="top:-8px;right:6px;">KB/s</span>' : "");
+      }
+
+      function valueMax(vals) {
+        return currentTab === "traffic" ? Math.max(10, ...vals) * 1.2 : 100;
+      }
+
+      // 하루 그래프: 가로축 00:00~24:00, 1분 평균. 서버가 꺼져 있던 구간(2분 넘게 빈 곳)은 선을 끊는다
+      function drawDayChart() {
         const svg = document.getElementById("chart");
         const W = 800,
           H = 200;
-        const minutes = Number(currentRange);
-        const end = Date.now();
-        const start = end - minutes * 60000;
-        const pts = stored.filter((p) => p.time >= start);
+        const day = storedDay || localDate(new Date());
+        const start = new Date(day + "T00:00").getTime();
+        const end = start + 24 * 3600 * 1000;
+        const pts = stored;
         const vals = pts.map((p) => p[currentTab]);
-        const max = currentTab === "traffic" ? Math.max(10, ...vals) * 1.2 : 100;
+        const max = valueMax(vals);
         const color = CHART_COLORS[currentTab];
         const xy = (p) => [
           (((p.time - start) / (end - start)) * W).toFixed(1),
@@ -792,21 +914,37 @@
           const x0 = xy(seg[0])[0];
           const x1 = xy(seg[seg.length - 1])[0];
           lines += `<polyline points="${x0},${H} ${coords} ${x1},${H}" fill="${color}" opacity="0.08"/>`;
-          lines += `<polyline points="${coords}" fill="none" stroke="${color}" stroke-width="2"/>`;
+          lines += `<polyline points="${coords}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
         });
-        svg.innerHTML = gridLines(W, H) + lines;
+        // 3시간마다 세로 격자
+        let vgrid = "";
+        for (let h = 3; h < 24; h += 3) {
+          const x = (h / 24) * W;
+          vgrid += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#f3f4f7" stroke-width="1"/>`;
+        }
+        svg.innerHTML = vgrid + gridLines(W, H) + lines;
+        drawYAxis(max);
 
-        // 아래 시간 눈금 5개
-        const fmt = (t) =>
-          new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
-        document.getElementById("chart-foot").innerHTML = [0, 1, 2, 3, 4]
-          .map((i) => `<span>${fmt(start + (i / 4) * (end - start))}</span>`)
+        // 아래 시간 눈금: 00:00, 03:00, ... 24:00
+        document.getElementById("chart-foot").innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24]
+          .map((h) => {
+            const edge = h === 0 ? "transform:none;" : h === 24 ? "transform:translateX(-100%);" : "";
+            return `<span style="left:${(h / 24) * 100}%;${edge}">${String(h).padStart(2, "0")}:00</span>`;
+          })
           .join("");
+
         const unit = currentTab === "traffic" ? "KB/s" : "%";
-        const label = minutes >= 60 ? `${minutes / 60}시간` : `${minutes}분`;
-        document.getElementById("chart-caption").textContent = pts.length
-          ? `최근 ${label} · 1분 평균 (${unit}) · 기록 ${pts.length}개 · 최대 ${Math.max(...vals)}${unit}`
-          : `최근 ${label} 동안 저장된 기록이 없습니다 (1분마다 저장)`;
+        const dayLabel = day === localDate(new Date()) ? `${day} (오늘)` : day;
+        let caption = `${dayLabel} · 1분 평균 · 기록이 없습니다 (Agent가 연결되면 1분마다 저장)`;
+        if (pts.length) {
+          const top = pts.reduce((a, b) => (b[currentTab] > a[currentTab] ? b : a));
+          caption = `${dayLabel} · 1분 평균 · 기록 ${pts.length}개 · 최고 ${top[currentTab]}${unit} (${hhmm(top.time)})`;
+        }
+        document.getElementById("chart-caption").textContent = caption;
+      }
+
+      function hhmm(t) {
+        return new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
       }
 
       function drawLiveChart() {
@@ -814,11 +952,12 @@
         const W = 800,
           H = 200;
         const data = history[currentTab];
-        document.getElementById("chart-foot").innerHTML = "";
+        document.getElementById("chart-foot").innerHTML =
+          '<span style="left:0;transform:none;">80초 전</span><span style="left:100%;transform:translateX(-100%);">지금</span>';
         document.getElementById("chart-caption").textContent = "실시간 · 2초 간격 · 최근 80초";
         // 트래픽은 %가 아니라 KB/s라 스케일을 데이터 최대값 기준으로
-        const max =
-          currentTab === "traffic" ? Math.max(10, ...data) * 1.2 : 100;
+        const max = valueMax(data);
+        drawYAxis(max);
         const color = CHART_COLORS[currentTab];
 
         let pts = data
@@ -839,9 +978,41 @@
           grid +
           area +
           (data.length > 1
-            ? `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>`
+            ? `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/>`
             : "");
       }
+
+      // 하루 그래프에 마우스를 올리면 그 시각의 값 표시
+      function hideHover() {
+        document.getElementById("hover-line").style.display = "none";
+        document.getElementById("hover-tip").style.display = "none";
+      }
+      const chartArea = document.getElementById("chart-area");
+      chartArea.addEventListener("mousemove", (e) => {
+        if (currentRange === "live" || !stored.length) return hideHover();
+        const rect = chartArea.getBoundingClientRect();
+        const f = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+        const start = new Date((storedDay || localDate(new Date())) + "T00:00").getTime();
+        const t = start + f * 24 * 3600 * 1000;
+        // 마우스 위치와 가장 가까운 기록 (2분 넘게 떨어져 있으면 "기록 없음")
+        const near = stored.reduce((a, b) => (Math.abs(b.time - t) < Math.abs(a.time - t) ? b : a));
+        const line = document.getElementById("hover-line");
+        const tip = document.getElementById("hover-tip");
+        const unit = currentTab === "traffic" ? " KB/s" : "%";
+        let x = f * rect.width;
+        if (Math.abs(near.time - t) <= 2 * 60000) {
+          x = ((near.time - start) / (24 * 3600 * 1000)) * rect.width;
+          tip.textContent = `${hhmm(near.time)} · ${METRIC_NAMES[currentTab]} ${near[currentTab]}${unit}`;
+        } else {
+          tip.textContent = `${hhmm(t)} · 기록 없음`;
+        }
+        line.style.left = `${x}px`;
+        line.style.display = "block";
+        tip.style.display = "block";
+        // 오른쪽 끝에서는 말풍선을 왼쪽으로
+        tip.style.left = x > rect.width - 150 ? `${x - tip.offsetWidth - 8}px` : `${x + 8}px`;
+      });
+      chartArea.addEventListener("mouseleave", hideHover);
 
       // 탭 클릭 이벤트
       document.querySelectorAll(".map-tab[data-metric]").forEach((tab) => {
@@ -852,20 +1023,6 @@
           tab.classList.add("active");
           currentTab = tab.dataset.metric;
           drawChart();
-        });
-      });
-      // 기간 탭 (실시간 / 1시간 / 6시간 / 24시간)
-      document.querySelectorAll(".map-tab[data-range]").forEach((tab) => {
-        tab.addEventListener("click", () => {
-          document
-            .querySelectorAll(".map-tab[data-range]")
-            .forEach((t) => t.classList.remove("active"));
-          tab.classList.add("active");
-          currentRange = tab.dataset.range;
-          stored = [];
-          drawChart();
-          if (currentRange === "live") update();
-          else loadHistory();
         });
       });
 
@@ -977,6 +1134,8 @@
       setInterval(updateDisk, 5000);
       setInterval(updateTraffic, 2000);
       setInterval(loadHistory, 60000);
+      loadDays();
+      setInterval(loadDays, 10 * 60000); // 자정이 지나면 날짜 목록 갱신
     </script>
   </body>
 </html>

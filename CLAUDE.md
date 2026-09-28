@@ -40,7 +40,7 @@ aiwacs/  (본체, Spring Boot)
 src/main/java/com/sysone/aiwacs/
 ├── server/   AgentReport, MonitoredServer(엔티티), ServerService(수신·판정·서버 수정), ServerController(/api/agent/metrics, /api/servers, /api/companies)
 ├── monitor/  MonitorController(/api/status·procs·disk·traffic ?serverId=)
-├── history/  MetricHistory(엔티티), MetricHistoryService(1분 평균 저장·24시간 보관), MetricHistoryController(/api/history, /api/history/recent)
+├── history/  MetricHistory(엔티티), MetricHistoryService(1분 평균 저장·7일 보관), MetricHistoryController(/api/history?date=, /api/history/days, /api/history/recent)
 ├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·서버별 정책 결정·임계치 변경), PolicyController(/api/policies)
 ├── ai/       GeminiClient(호출·JSON 추출·재시도), AiService(프롬프트), AiController(/api/ai/*)
 └── config/   WebConfig (/policy, /ai, /servers 화면 주소 연결)
@@ -79,7 +79,8 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
    - 상단 `Company ▾`로 고객사 필터, "모니터링 서버" 탭으로 서버 선택 (온라인 점 + 대표 상태)
    - 장비 현황(전체/주의/위험/다운, OS별) = 서버 목록 기준 집계
    - 선택 서버의 CPU/메모리/디스크 판정, Resource Map, 프로세스 TOP5, 디스크 파티션, 트래픽
-   - Resource Map 기간: 실시간(2초, 최근 80초 — 본체 메모리에 보관해 서버 전환·화면 이동 후에도 유지) / 1시간 / 6시간 / 24시간(DB에 저장된 1분 평균, 서버가 꺼졌던 구간은 선을 끊음)
+   - Resource Map: 기본은 **오늘 하루**(가로 00:00~24:00, 세로 %, 1분 평균, 마우스를 올리면 그 시각 값). 날짜 선택으로 지난 날짜(보관 7일) 조회, 서버가 꺼졌던 구간은 선을 끊음
+   - '실시간(최근 80초, 2초 간격)'도 선택 가능 — 본체 메모리에 보관해 서버 전환·화면 이동 후에도 유지
    - 사용량 위젯(CPU·메모리 TOP5, 디스크, 트래픽): 세로 막대그래프, 항목 수에 따라 막대 너비 자동 조절
 2. **장비 목록** (`/servers`) — Agent가 자동 등록한 서버 관리
    - 장비 이름(표시 이름) 변경, 고객사 지정, 적용 정책 지정 (그 고객사의 정책만 선택 가능)
@@ -102,7 +103,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - [x] AI 상태 진단 (세부지표 활용, 서버별)
 - [x] VM Agent (여러 서버 모니터링, 자동 등록, 토큰 옵션)
 - [x] 정책-서버 매칭 (고객사 → 서버 → 정책), 장비 이름 변경
-- [x] 지표 이력 저장 (1분 평균, 24시간 보관 `history.retention-hours`) → Resource Map 기간 선택
+- [x] 지표 이력 저장 (1분 평균, 7일 보관 `history.retention-days`) → Resource Map 날짜별 하루 그래프
 - [ ] AI 조치 실행 (프로세스 끄기/재시작 등) — 예정
 - [ ] Agent 자동 실행(systemd 서비스), Agent 로그 영어화(VM 콘솔 한글 깨짐) — 예정
 - [ ] 로컬 LLM으로도 동작해 보기 — 예정 (현재 Gemini). AI 호출은 `GeminiClient` 한 곳에 모여 있어 교체 지점이 명확함

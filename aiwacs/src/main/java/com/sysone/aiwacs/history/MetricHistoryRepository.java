@@ -10,7 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface MetricHistoryRepository extends JpaRepository<MetricHistory, Long> {
 
-    List<MetricHistory> findByServerIdAndTimeGreaterThanEqualOrderByTimeAsc(Long serverId, Instant from);
+    /** from 이상 to 미만 (하루치) */
+    List<MetricHistory> findByServerIdAndTimeGreaterThanEqualAndTimeLessThanOrderByTimeAsc(Long serverId, Instant from, Instant to);
 
     /** 보관 기간이 지난 이력 삭제 */
     @Transactional

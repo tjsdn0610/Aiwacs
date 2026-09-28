@@ -1,7 +1,8 @@
 package com.sysone.aiwacs.history;
 
-import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -20,7 +21,7 @@ import com.sysone.aiwacs.server.AgentReport;
 /**
  * 지표 이력 저장.
  * Agent는 2초마다 값을 보내지만, 그대로 DB에 쌓으면 양이 많아서 서버별로 1분씩 모아 평균 한 줄만 저장한다.
- * 보관 기간(기본 24시간)이 지난 이력은 1시간마다 지운다.
+ * 보관 기간(기본 7일)이 지난 날짜의 이력은 1시간마다 지운다. 화면에서는 날짜를 골라 그날 하루(00:00~24:00)를 본다.
  * 실시간 그래프용으로 서버별 최근 40개(약 80초) 원본 값은 메모리에 따로 들고 있다 (화면을 다시 열어도 그래프가 이어지도록).
  */
 @Service
@@ -48,16 +49,19 @@ public class MetricHistoryService {
     private record Point(long time, double cpu, double memory, double disk, double traffic) {}
 
     private final MetricHistoryRepository repository;
-    private final Duration retention;
+    /** 날짜 경계(자정)를 정하는 시간대 = 본체가 실행 중인 컴퓨터의 시간대 */
+    private static final ZoneId ZONE = ZoneId.systemDefault();
+
+    private final int retentionDays;
     /** 서버 id → 아직 저장 안 된 "지금 이 1분"의 합계 */
     private final Map<Long, Bucket> current = new HashMap<>();
     /** 서버 id → 최근 원본 값 (오래된 순) */
     private final Map<Long, Deque<Point>> recent = new HashMap<>();
 
     public MetricHistoryService(MetricHistoryRepository repository,
-                                @Value("${history.retention-hours:24}") long retentionHours) {
+                                @Value("${history.retention-days:7}") int retentionDays) {
         this.repository = repository;
-        this.retention = Duration.ofHours(retentionHours);
+        this.retentionDays = Math.max(1, retentionDays);
     }
 
     /** Agent 지표가 들어올 때마다 호출. 분이 바뀌었으면 직전 1분의 평균을 저장한다. */
@@ -111,24 +115,39 @@ public class MetricHistoryService {
         repository.saveAll(rows);
     }
 
-    /** 매시 정각: 보관 기간이 지난 이력 삭제 */
+    /** 매시 정각: 보관 기간이 지난 날짜의 이력 삭제 (7일이면 오늘 포함 7일치만 남김) */
     @Scheduled(cron = "0 0 * * * *")
     public void purge() {
-        repository.deleteOlderThan(Instant.now().minus(retention));
+        repository.deleteOlderThan(oldestDay().atStartOfDay(ZONE).toInstant());
+    }
+
+    /** 볼 수 있는 날짜 목록 (오늘부터 과거 순) */
+    public List<LocalDate> days() {
+        LocalDate today = LocalDate.now(ZONE);
+        List<LocalDate> list = new ArrayList<>();
+        for (int i = 0; i < retentionDays; i++) {
+            list.add(today.minusDays(i));
+        }
+        return list;
+    }
+
+    private LocalDate oldestDay() {
+        return LocalDate.now(ZONE).minusDays(retentionDays - 1);
     }
 
     /**
-     * 최근 minutes분의 1분 평균 이력 (오래된 순).
-     * 아직 저장 전인 "지금 이 1분"의 중간 평균도 마지막에 붙여서, 방금 켠 서버도 바로 그래프가 보이게 한다.
+     * 그날 하루(00:00~24:00)의 1분 평균 이력 (오래된 순).
+     * 오늘이면 아직 저장 전인 "지금 이 1분"의 중간 평균도 마지막에 붙여서, 방금 켠 서버도 바로 그래프가 보이게 한다.
      */
-    public List<Map<String, Object>> history(Long serverId, int minutes) {
-        long max = retention.toMinutes();
-        Instant from = Instant.now().truncatedTo(ChronoUnit.MINUTES).minus(Duration.ofMinutes(Math.clamp(minutes, 1, max)));
+    public List<Map<String, Object>> history(Long serverId, LocalDate date) {
+        Instant from = date.atStartOfDay(ZONE).toInstant();
+        Instant to = date.plusDays(1).atStartOfDay(ZONE).toInstant();
         List<MetricHistory> rows = new ArrayList<>(
-                repository.findByServerIdAndTimeGreaterThanEqualOrderByTimeAsc(serverId, from));
+                repository.findByServerIdAndTimeGreaterThanEqualAndTimeLessThanOrderByTimeAsc(serverId, from, to));
         synchronized (current) {
             Bucket b = current.get(serverId);
-            if (b != null && (rows.isEmpty() || rows.getLast().getTime().isBefore(b.minute))) {
+            if (b != null && !b.minute.isBefore(from) && b.minute.isBefore(to)
+                    && (rows.isEmpty() || rows.getLast().getTime().isBefore(b.minute))) {
                 rows.add(b.average(serverId));
             }
         }
