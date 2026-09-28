@@ -1,5 +1,10 @@
 package com.sysone.aiwacs.policy;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.Column;
@@ -8,6 +13,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 /**
@@ -50,6 +57,10 @@ public class Policy {
     })
     private Threshold disk;
 
+    /** 마지막으로 저장(추가·수정·AI 임계치 변경)된 시각 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updatedAt;
+
     protected Policy() {
     }
 
@@ -59,6 +70,13 @@ public class Policy {
         this.cpu = cpu;
         this.memory = memory;
         this.disk = disk;
+    }
+
+    /** 저장될 때마다 수정일자를 자동으로 기록 (값이 실제로 바뀐 경우에만 호출됨) */
+    @PrePersist
+    @PreUpdate
+    void touch() {
+        updatedAt = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
     }
 
     /** "cpu" / "memory" / "disk" 이름으로 임계치 조회 (없는 지표면 null) */
@@ -113,5 +131,9 @@ public class Policy {
 
     public void setDisk(Threshold disk) {
         this.disk = disk;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
     }
 }

@@ -38,41 +38,6 @@
       .logo span {
         color: #3f6ad8;
       }
-      .menu {
-        padding: 8px 0;
-      }
-      .menu-item {
-        padding: 9px 18px;
-        color: #5a6072;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .menu-item:hover {
-        background: #f5f6fa;
-      }
-      .menu-item.active {
-        background: #3f6ad8;
-        color: #fff;
-        font-weight: 600;
-      }
-      .menu-item.sub {
-        padding-left: 34px;
-        font-size: 12px;
-        color: #7a8194;
-      }
-      .menu-item.sub.active {
-        background: #eaf0fb;
-        color: #3f6ad8;
-      }
-      .menu-cat {
-        padding: 9px 18px;
-        color: #3a3f52;
-        font-weight: 600;
-        display: flex;
-        justify-content: space-between;
-      }
 
       /* ===== 메인 영역 ===== */
       .main {
@@ -232,6 +197,42 @@
         background: #3f6ad8;
         color: #fff;
         border-color: #3f6ad8;
+      }
+      /* 자동 전환: 선택된 탭 아래 막대가 10초 동안 차오름 */
+      .map-tab[data-metric] {
+        position: relative;
+        overflow: hidden;
+      }
+      .map-tab .progress {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        height: 2px;
+        width: 0;
+        background: rgba(255, 255, 255, 0.85);
+      }
+      .map-tab.active .progress.run {
+        animation: tab-progress 10s linear forwards;
+      }
+      .map-tab.active .progress.paused {
+        animation-play-state: paused;
+      }
+      @keyframes tab-progress {
+        from { width: 0; }
+        to { width: 100%; }
+      }
+      /* 전환 모션: 왼쪽으로 사라지고 오른쪽에서 들어옴 */
+      .slide {
+        transition: transform 0.3s ease, opacity 0.3s ease;
+      }
+      .slide.out {
+        transform: translateX(-40px);
+        opacity: 0;
+      }
+      .slide.in-start {
+        transform: translateX(40px);
+        opacity: 0;
+        transition: none;
       }
       .map-tabs .sep {
         width: 10px;
@@ -444,38 +445,8 @@
   <body>
     <div class="layout">
       <!-- 사이드바 -->
-      <aside class="sidebar">
-        <div class="logo" onclick="location.href = '/'" style="cursor: pointer">
-          Ai<span>WACS</span>
-        </div>
-        <div class="menu">
-          <div class="menu-cat">대시보드 <span>˄</span></div>
-          <div class="menu-item sub active">요약</div>
-          <div class="menu-item sub">실시간</div>
-          <div class="menu-item"><a href="/servers" style="color: inherit; text-decoration: none">장비 목록</a></div>
-          <div class="menu-item">ICMP</div>
-          <div class="menu-item">프로세스</div>
-          <div class="menu-item">추적</div>
-          <div class="menu-item">서비스</div>
-          <div class="menu-item">로그 조회</div>
-          <div class="menu-item">알림</div>
-          <div class="menu-item">
-            <a href="/ai" style="color: inherit; text-decoration: none"
-              >AI 운영 도우미</a
-            >
-          </div>
-          <div class="menu-item">장비 비교/분석</div>
-          <div class="menu-item">보고서</div>
-          <div class="menu-item">장비 모니터링</div>
-          <div class="menu-item">
-            <a href="/policy" style="color: inherit; text-decoration: none"
-              >정책 관리</a
-            >
-          </div>
-          <div class="menu-item">그룹 설정</div>
-          <div class="menu-item">환경설정</div>
-        </div>
-      </aside>
+      <aside class="sidebar"></aside>
+      <script src="/sidebar.js"></script>
 
       <!-- 메인 -->
       <div class="main">
@@ -484,8 +455,12 @@
           <div class="topbar-right">
             <span><b>aiwacs</b>님, 환영합니다.</span>
             <span>현재 시각: <span id="clock">--:--:--</span></span>
-            <select id="company-filter" class="company-filter" onchange="changeCompany(this.value)">
-              <option value="">Company ▾ 전체</option>
+            <select
+              id="company-filter"
+              class="company-filter"
+              onchange="changeCompany(this.value)"
+            >
+              <option value="">Company</option>
             </select>
           </div>
         </div>
@@ -579,16 +554,21 @@
                 <div class="map-tab" data-metric="disk">DISK</div>
                 <div class="map-tab" data-metric="traffic">TRAFFIC</div>
                 <div class="sep"></div>
-                <select class="day-select" id="day-select" onchange="changeRange(this.value)">
+                <select
+                  class="day-select"
+                  id="day-select"
+                  onchange="changeRange(this.value)"
+                >
                   <option value="today">오늘</option>
                   <option value="live">실시간 (최근 80초)</option>
                 </select>
               </div>
               <div class="chart-wrap">
-                <div class="y-axis" id="y-axis"></div>
+                <div class="y-axis slide" id="y-axis"></div>
                 <div class="chart-area" id="chart-area">
                   <svg
                     id="chart"
+                    class="slide"
                     width="100%"
                     height="200"
                     viewBox="0 0 800 200"
@@ -651,7 +631,7 @@
           const list = await (await fetch("/api/companies")).json();
           const sel = document.getElementById("company-filter");
           sel.innerHTML =
-            '<option value="">Company ▾ 전체</option>' +
+            '<option value="">Company 전체</option>' +
             list.map((c) => `<option value="${c}">${c}</option>`).join("");
           sel.value = list.includes(companyFilter) ? companyFilter : "";
         } catch (e) {
@@ -669,10 +649,17 @@
         try {
           const res = await fetch("/api/servers");
           const all = await res.json();
-          serverList = companyFilter ? all.filter((s) => s.company === companyFilter) : all;
+          serverList = companyFilter
+            ? all.filter((s) => s.company === companyFilter)
+            : all;
           // 처음이거나 선택한 서버가 목록에서 사라졌으면: 온라인 서버 우선으로 첫 번째 선택
-          if (serverList.length && !serverList.some((s) => s.id === selectedServerId)) {
-            selectServer((serverList.find((s) => s.online) || serverList[0]).id);
+          if (
+            serverList.length &&
+            !serverList.some((s) => s.id === selectedServerId)
+          ) {
+            selectServer(
+              (serverList.find((s) => s.online) || serverList[0]).id,
+            );
           }
           if (!serverList.length) selectedServerId = null;
           renderServerTabs(serverList);
@@ -799,7 +786,8 @@
               .map((d, i) => `<option value="${d}">${label(d, i + 1)}</option>`)
               .join("");
           // 선택했던 날짜가 보관 기간이 지나 목록에서 빠졌으면 오늘로
-          if (![...sel.options].some((o) => o.value === currentRange)) currentRange = "today";
+          if (![...sel.options].some((o) => o.value === currentRange))
+            currentRange = "today";
           sel.value = currentRange;
         } catch (e) {
           console.log(e);
@@ -823,7 +811,8 @@
         const day = range === "today" ? localDate(new Date()) : range;
         try {
           const res = await fetch(`/api/history?serverId=${id}&date=${day}`);
-          if (!res.ok || id !== selectedServerId || range !== currentRange) return;
+          if (!res.ok || id !== selectedServerId || range !== currentRange)
+            return;
           stored = await res.json();
           storedDay = day;
           drawChart();
@@ -844,7 +833,12 @@
         disk: "#e0a020",
         traffic: "#9b59b6",
       };
-      const METRIC_NAMES = { cpu: "CPU", memory: "메모리", disk: "디스크", traffic: "트래픽" };
+      const METRIC_NAMES = {
+        cpu: "CPU",
+        memory: "메모리",
+        disk: "디스크",
+        traffic: "트래픽",
+      };
 
       function drawChart() {
         hideHover();
@@ -865,86 +859,100 @@
       // 세로축 눈금: %는 0~100, 트래픽은 그래프 최대값 기준 KB/s
       function drawYAxis(max) {
         const unit = currentTab === "traffic" ? "" : "%";
-        document.getElementById("y-axis").innerHTML = [0, 1, 2, 3, 4, 5]
-          .map((i) => {
-            const v = (max * i) / 5;
-            const text = currentTab === "traffic" ? (v >= 100 ? Math.round(v) : v.toFixed(1)) : Math.round(v);
-            return `<span style="top:${100 - i * 20}%">${text}${unit}</span>`;
-          })
-          .join("") +
-          (currentTab === "traffic" ? '<span style="top:-8px;right:6px;">KB/s</span>' : "");
+        document.getElementById("y-axis").innerHTML =
+          [0, 1, 2, 3, 4, 5]
+            .map((i) => {
+              const v = (max * i) / 5;
+              const text =
+                currentTab === "traffic"
+                  ? v >= 100
+                    ? Math.round(v)
+                    : v.toFixed(1)
+                  : Math.round(v);
+              return `<span style="top:${100 - i * 20}%">${text}${unit}</span>`;
+            })
+            .join("") +
+          (currentTab === "traffic"
+            ? '<span style="top:-8px;right:6px;">KB/s</span>'
+            : "");
       }
 
       function valueMax(vals) {
         return currentTab === "traffic" ? Math.max(10, ...vals) * 1.2 : 100;
       }
 
-      // 하루 그래프: 가로축 00:00~24:00, 1분 평균. 서버가 꺼져 있던 구간(2분 넘게 빈 곳)은 선을 끊는다
+      // 하루를 15분 단위 96칸으로 나눈 막대 (1분 평균 기록을 15분씩 묶음)
+      const SLOT_MS = 15 * 60000;
+      const SLOTS = 96;
+      function daySlots(start) {
+        const slots = Array.from({ length: SLOTS }, () => []);
+        stored.forEach((p) => {
+          const i = Math.floor((p.time - start) / SLOT_MS);
+          if (i >= 0 && i < SLOTS) slots[i].push(p[currentTab]);
+        });
+        return slots.map((vals) =>
+          vals.length
+            ? {
+                avg: Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10,
+                max: Math.max(...vals),
+                count: vals.length,
+              }
+            : null,
+        );
+      }
+
+      // 하루 그래프: 가로축 00:00~24:00, 15분마다 막대 1개 (AiWACS 방식). 기록이 없는 칸은 비워 둠
       function drawDayChart() {
         const svg = document.getElementById("chart");
         const W = 800,
           H = 200;
         const day = storedDay || localDate(new Date());
         const start = new Date(day + "T00:00").getTime();
-        const end = start + 24 * 3600 * 1000;
         const pts = stored;
-        const vals = pts.map((p) => p[currentTab]);
-        const max = valueMax(vals);
+        const slots = daySlots(start);
+        const max = valueMax(slots.filter(Boolean).map((s) => s.avg));
         const color = CHART_COLORS[currentTab];
-        const xy = (p) => [
-          (((p.time - start) / (end - start)) * W).toFixed(1),
-          (H - (p[currentTab] / max) * H).toFixed(1),
-        ];
+        const slotW = W / SLOTS;
 
-        // 연속된 구간끼리 묶기
-        const segments = [];
-        pts.forEach((p, i) => {
-          if (i === 0 || p.time - pts[i - 1].time > 2 * 60000) segments.push([]);
-          segments[segments.length - 1].push(p);
+        let bars = "";
+        slots.forEach((s, i) => {
+          if (!s) return;
+          const h = Math.max(1, (Math.min(s.avg, max) / max) * H);
+          bars += `<rect x="${(i * slotW + 0.6).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(slotW - 1.2).toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" opacity="0.85"/>`;
         });
-
-        let lines = "";
-        segments.forEach((seg) => {
-          const coords = seg.map((p) => xy(p).join(",")).join(" ");
-          if (seg.length === 1) {
-            const [x, y] = xy(seg[0]);
-            lines += `<circle cx="${x}" cy="${y}" r="2" fill="${color}"/>`;
-            return;
-          }
-          const x0 = xy(seg[0])[0];
-          const x1 = xy(seg[seg.length - 1])[0];
-          lines += `<polyline points="${x0},${H} ${coords} ${x1},${H}" fill="${color}" opacity="0.08"/>`;
-          lines += `<polyline points="${coords}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
-        });
-        // 3시간마다 세로 격자
+        // 1시간마다 세로 격자 (한 칸 안에 15분 막대 4개)
         let vgrid = "";
-        for (let h = 3; h < 24; h += 3) {
+        for (let h = 1; h < 24; h++) {
           const x = (h / 24) * W;
-          vgrid += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#f3f4f7" stroke-width="1"/>`;
+          vgrid += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="#e9ebf0" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
         }
-        svg.innerHTML = vgrid + gridLines(W, H) + lines;
+        svg.innerHTML = vgrid + gridLines(W, H) + bars;
         drawYAxis(max);
 
-        // 아래 시간 눈금: 00:00, 03:00, ... 24:00
-        document.getElementById("chart-foot").innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24]
-          .map((h) => {
-            const edge = h === 0 ? "transform:none;" : h === 24 ? "transform:translateX(-100%);" : "";
-            return `<span style="left:${(h / 24) * 100}%;${edge}">${String(h).padStart(2, "0")}:00</span>`;
-          })
-          .join("");
+        // 아래 시간 눈금: 매시간 00~24 (자리가 좁아서 두 자리 숫자만, 정확한 시각은 마우스를 올리면 표시)
+        document.getElementById("chart-foot").innerHTML = Array.from({ length: 25 }, (_, h) => {
+          const edge = h === 0 ? "transform:none;" : h === 24 ? "transform:translateX(-100%);" : "";
+          return `<span style="left:${(h / 24) * 100}%;${edge}">${String(h).padStart(2, "0")}</span>`;
+        }).join("");
 
         const unit = currentTab === "traffic" ? "KB/s" : "%";
         const dayLabel = day === localDate(new Date()) ? `${day} (오늘)` : day;
-        let caption = `${dayLabel} · 1분 평균 · 기록이 없습니다 (Agent가 연결되면 1분마다 저장)`;
+        let caption = `${dayLabel} · 15분 평균 · 기록이 없습니다 (Agent가 연결되면 1분마다 저장)`;
         if (pts.length) {
-          const top = pts.reduce((a, b) => (b[currentTab] > a[currentTab] ? b : a));
-          caption = `${dayLabel} · 1분 평균 · 기록 ${pts.length}개 · 최고 ${top[currentTab]}${unit} (${hhmm(top.time)})`;
+          const top = pts.reduce((a, b) =>
+            b[currentTab] > a[currentTab] ? b : a,
+          );
+          caption = `${dayLabel} · 15분 평균 막대 · 기록 ${pts.length}분 · 1분 최고 ${top[currentTab]}${unit} (${hhmm(top.time)})`;
         }
         document.getElementById("chart-caption").textContent = caption;
       }
 
       function hhmm(t) {
-        return new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+        return new Date(t).toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
       }
 
       function drawLiveChart() {
@@ -954,7 +962,8 @@
         const data = history[currentTab];
         document.getElementById("chart-foot").innerHTML =
           '<span style="left:0;transform:none;">80초 전</span><span style="left:100%;transform:translateX(-100%);">지금</span>';
-        document.getElementById("chart-caption").textContent = "실시간 · 2초 간격 · 최근 80초";
+        document.getElementById("chart-caption").textContent =
+          "실시간 · 2초 간격 · 최근 80초";
         // 트래픽은 %가 아니라 KB/s라 스케일을 데이터 최대값 기준으로
         const max = valueMax(data);
         drawYAxis(max);
@@ -991,40 +1000,108 @@
       chartArea.addEventListener("mousemove", (e) => {
         if (currentRange === "live" || !stored.length) return hideHover();
         const rect = chartArea.getBoundingClientRect();
-        const f = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+        const f = Math.min(0.9999, Math.max(0, (e.clientX - rect.left) / rect.width));
         const start = new Date((storedDay || localDate(new Date())) + "T00:00").getTime();
-        const t = start + f * 24 * 3600 * 1000;
-        // 마우스 위치와 가장 가까운 기록 (2분 넘게 떨어져 있으면 "기록 없음")
-        const near = stored.reduce((a, b) => (Math.abs(b.time - t) < Math.abs(a.time - t) ? b : a));
+        // 마우스가 올라간 15분 칸
+        const i = Math.floor(f * SLOTS);
+        const s = daySlots(start)[i];
+        const from = start + i * SLOT_MS;
         const line = document.getElementById("hover-line");
         const tip = document.getElementById("hover-tip");
         const unit = currentTab === "traffic" ? " KB/s" : "%";
-        let x = f * rect.width;
-        if (Math.abs(near.time - t) <= 2 * 60000) {
-          x = ((near.time - start) / (24 * 3600 * 1000)) * rect.width;
-          tip.textContent = `${hhmm(near.time)} · ${METRIC_NAMES[currentTab]} ${near[currentTab]}${unit}`;
-        } else {
-          tip.textContent = `${hhmm(t)} · 기록 없음`;
-        }
+        const range = `${hhmm(from)}~${hhmm(from + SLOT_MS)}`;
+        tip.textContent = s
+          ? `${range} · ${METRIC_NAMES[currentTab]} 평균 ${s.avg}${unit} (최고 ${s.max}${unit})`
+          : `${range} · 기록 없음`;
+        const x = ((i + 0.5) / SLOTS) * rect.width; // 칸 가운데
         line.style.left = `${x}px`;
         line.style.display = "block";
         tip.style.display = "block";
         // 오른쪽 끝에서는 말풍선을 왼쪽으로
-        tip.style.left = x > rect.width - 150 ? `${x - tip.offsetWidth - 8}px` : `${x + 8}px`;
+        tip.style.left = x > rect.width - 230 ? `${x - tip.offsetWidth - 8}px` : `${x + 8}px`;
       });
       chartArea.addEventListener("mouseleave", hideHover);
 
-      // 탭 클릭 이벤트
+      // ===== 지표 탭 (CPU → MEMORY → DISK → TRAFFIC) 10초마다 자동 전환 =====
+      const METRIC_ORDER = ["cpu", "memory", "disk", "traffic"];
+      const ROTATE_MS = 10000;
+      let rotateTimer = null;
+      let rotateLeft = ROTATE_MS; // 다음 전환까지 남은 시간 (마우스를 올려 멈추면 남은 만큼 이어감)
+      let rotateStartedAt = 0;
+      let rotatePaused = false;
+
       document.querySelectorAll(".map-tab[data-metric]").forEach((tab) => {
+        tab.insertAdjacentHTML("beforeend", '<span class="progress"></span>');
+        // 직접 누르면 그 탭으로 가고 10초를 처음부터 다시 셈
         tab.addEventListener("click", () => {
-          document
-            .querySelectorAll(".map-tab[data-metric]")
-            .forEach((t) => t.classList.remove("active"));
-          tab.classList.add("active");
-          currentTab = tab.dataset.metric;
-          drawChart();
+          if (tab.dataset.metric !== currentTab) selectMetric(tab.dataset.metric);
+          else restartRotation();
         });
       });
+
+      // 탭 전환 + 슬라이드 모션
+      function selectMetric(metric) {
+        const parts = [document.getElementById("chart"), document.getElementById("y-axis")];
+        parts.forEach((el) => el.classList.add("out"));
+        setTimeout(() => {
+          currentTab = metric;
+          document
+            .querySelectorAll(".map-tab[data-metric]")
+            .forEach((t) => t.classList.toggle("active", t.dataset.metric === metric));
+          drawChart();
+          parts.forEach((el) => {
+            el.classList.remove("out");
+            el.classList.add("in-start");
+          });
+          // 다음 프레임에 원위치로 → 오른쪽에서 미끄러져 들어옴
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => parts.forEach((el) => el.classList.remove("in-start"))),
+          );
+        }, 300);
+        restartRotation();
+      }
+
+      function nextMetric() {
+        const i = METRIC_ORDER.indexOf(currentTab);
+        selectMetric(METRIC_ORDER[(i + 1) % METRIC_ORDER.length]);
+      }
+
+      function restartRotation() {
+        rotateLeft = ROTATE_MS;
+        // 진행 막대 애니메이션을 처음부터 다시
+        document.querySelectorAll(".map-tab .progress").forEach((p) => {
+          p.classList.remove("run", "paused");
+          void p.offsetWidth;
+        });
+        document.querySelector(`.map-tab[data-metric="${currentTab}"] .progress`)?.classList.add("run");
+        if (rotatePaused) {
+          document.querySelectorAll(".map-tab .progress").forEach((p) => p.classList.add("paused"));
+          clearTimeout(rotateTimer);
+          return;
+        }
+        scheduleRotation();
+      }
+
+      function scheduleRotation() {
+        clearTimeout(rotateTimer);
+        rotateStartedAt = Date.now();
+        rotateTimer = setTimeout(nextMetric, rotateLeft);
+      }
+
+      // 그래프 위에 마우스가 있으면 멈춤 (값을 읽는 중에 넘어가지 않게)
+      const mapPanel = document.querySelector(".resource-map");
+      mapPanel.addEventListener("mouseenter", () => {
+        rotatePaused = true;
+        clearTimeout(rotateTimer);
+        rotateLeft = Math.max(0, rotateLeft - (Date.now() - rotateStartedAt));
+        document.querySelectorAll(".map-tab .progress").forEach((p) => p.classList.add("paused"));
+      });
+      mapPanel.addEventListener("mouseleave", () => {
+        rotatePaused = false;
+        document.querySelectorAll(".map-tab .progress").forEach((p) => p.classList.remove("paused"));
+        scheduleRotation();
+      });
+      restartRotation();
 
       // 사용량 위젯: 세로 막대그래프. 항목이 적으면 막대가 넓고, 많아질수록 얇아짐
       // items: [{name, value, color}] / 막대 높이 = value / max (100%를 넘지 않게)
@@ -1050,14 +1127,22 @@
           if (!res.ok) return;
           const list = await res.json();
           const cpuHtml = columnChart(
-            list.slice(0, 5).map((p) => ({ name: p.name, value: p.cpu.toFixed(1), color: CHART_COLORS.cpu })),
+            list.slice(0, 5).map((p) => ({
+              name: p.name,
+              value: p.cpu.toFixed(1),
+              color: CHART_COLORS.cpu,
+            })),
             "%",
           );
           const memHtml = columnChart(
             [...list]
               .sort((a, b) => b.mem - a.mem)
               .slice(0, 5)
-              .map((p) => ({ name: p.name, value: p.mem.toFixed(1), color: CHART_COLORS.memory })),
+              .map((p) => ({
+                name: p.name,
+                value: p.mem.toFixed(1),
+                color: CHART_COLORS.memory,
+              })),
             "%",
           );
           const c = document.getElementById("cpu-top");

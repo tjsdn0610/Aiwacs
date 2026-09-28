@@ -44,7 +44,7 @@ src/main/java/com/sysone/aiwacs/
 ├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·서버별 정책 결정·임계치 변경), PolicyController(/api/policies)
 ├── ai/       GeminiClient(호출·JSON 추출·재시도), AiService(프롬프트), AiController(/api/ai/*)
 └── config/   WebConfig (/policy, /ai, /servers 화면 주소 연결)
-src/main/resources/static/  index.html, servers.html, policy.html, ai.html
+src/main/resources/static/  index.html, servers.html, policy.html, ai.html, sidebar.js(모든 화면 공통 사이드바 메뉴)
 docker-compose.yml           PostgreSQL (볼륨 이름 `aiwacs-pgdata`로 고정)
 
 aiwacs-agent/  (모니터링 대상 서버에 설치, Java 17+, Spring 없음)
@@ -75,17 +75,19 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 ## 3. 기능 명세
 
 ### 화면 4개
+- 공통 사이드바(`sidebar.js`): 대시보드(요약·실시간) / AI 운영 도우미(상태 진단·임계치 변경) / 장비 목록 / ICMP … / 정책 관리(알림 정책 …) / 그룹 설정 / 환경설정. 하위 메뉴는 화살표로 펼침. 링크 없는 항목은 AiWACS 메뉴 구성 재현용 자리
 1. **메인 대시보드** — VM 실시간 모니터링 (AiWACS 스타일 재현)
    - 상단 `Company ▾`로 고객사 필터, "모니터링 서버" 탭으로 서버 선택 (온라인 점 + 대표 상태)
    - 장비 현황(전체/주의/위험/다운, OS별) = 서버 목록 기준 집계
    - 선택 서버의 CPU/메모리/디스크 판정, Resource Map, 프로세스 TOP5, 디스크 파티션, 트래픽
-   - Resource Map: 기본은 **오늘 하루**(가로 00:00~24:00, 세로 %, 1분 평균, 마우스를 올리면 그 시각 값). 날짜 선택으로 지난 날짜(보관 7일) 조회, 서버가 꺼졌던 구간은 선을 끊음
+   - Resource Map: 기본은 **오늘 하루**(가로 00:00~24:00, 세로 %, 15분 단위 막대 96개 = 1분 평균 기록을 15분씩 묶은 평균, 마우스를 올리면 그 15분의 평균·최고값). 날짜 선택으로 지난 날짜(보관 7일) 조회, 기록이 없는 칸은 비움
+   - CPU → MEMORY → DISK → TRAFFIC 탭이 10초마다 슬라이드 모션으로 자동 전환 (마우스를 올리면 멈춤)
    - '실시간(최근 80초, 2초 간격)'도 선택 가능 — 본체 메모리에 보관해 서버 전환·화면 이동 후에도 유지
    - 사용량 위젯(CPU·메모리 TOP5, 디스크, 트래픽): 세로 막대그래프, 항목 수에 따라 막대 너비 자동 조절
 2. **장비 목록** (`/servers`) — Agent가 자동 등록한 서버 관리
    - 장비 이름(표시 이름) 변경, 고객사 지정, 적용 정책 지정 (그 고객사의 정책만 선택 가능)
    - Agent ID(`agent.properties`의 server.name)는 서버 식별용으로 유지, 화면 이름만 따로 변경
-3. **알림정책** — 임계치 설정 (여러 정책 + 고객사 + CRUD). 고객사 목록은 정책의 고객사에서 가져옴
+3. **알림정책** — 임계치 설정 (여러 정책 + 고객사 + CRUD + 수정일자 자동 기록). 고객사 목록은 정책의 고객사에서 가져옴
 4. **AI 운영 도우미** — 탭 2개
    - **AI 상태 진단**: 서버 선택 → 그 서버의 상태+세부지표+프로세스를 AI가 해석 (오프라인 서버는 진단 불가)
    - **AI 임계치 설정**: 자연어로 정책 임계치 변경 (여러 개 동시 가능)

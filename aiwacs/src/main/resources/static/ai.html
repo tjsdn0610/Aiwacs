@@ -36,27 +36,6 @@
       .logo span {
         color: #3f6ad8;
       }
-      .menu {
-        padding: 8px 0;
-      }
-      .menu-item {
-        padding: 9px 18px;
-        color: #5a6072;
-        cursor: pointer;
-      }
-      .menu-item:hover {
-        background: #f5f6fa;
-      }
-      .menu-item a {
-        color: inherit;
-        text-decoration: none;
-        display: block;
-      }
-      .menu-item.active {
-        background: #3f6ad8;
-        color: #fff;
-        font-weight: 600;
-      }
       .main {
         flex: 1;
         display: flex;
@@ -399,25 +378,8 @@
   </head>
   <body>
     <div class="layout">
-      <aside class="sidebar">
-        <div class="logo" onclick="location.href = '/'" style="cursor: pointer">
-          Ai<span>WACS</span>
-        </div>
-        <div class="menu">
-          <div class="menu-item"><a href="/">대시보드</a></div>
-          <div class="menu-item"><a href="/servers">장비 목록</a></div>
-          <div class="menu-item">ICMP</div>
-          <div class="menu-item">프로세스</div>
-          <div class="menu-item">추적</div>
-          <div class="menu-item">서비스</div>
-          <div class="menu-item">로그 조회</div>
-          <div class="menu-item">알림</div>
-          <div class="menu-item active">AI 운영 도우미</div>
-          <div class="menu-item"><a href="/policy">정책 관리</a></div>
-          <div class="menu-item">그룹 설정</div>
-          <div class="menu-item">환경설정</div>
-        </div>
-      </aside>
+      <aside class="sidebar"></aside>
+      <script src="/sidebar.js"></script>
       <div class="main">
         <div class="topbar">
           <div class="breadcrumb">홈 &gt; <b>AI 운영 도우미</b></div>
@@ -508,7 +470,19 @@
           tab === "diagnose" ? "block" : "none";
         document.getElementById("panel-threshold").style.display =
           tab === "threshold" ? "block" : "none";
+        // 주소 끝(#diagnose / #threshold)을 맞춰서 사이드바 선택 표시와 새로고침 후에도 같은 탭 유지
+        if (location.hash.slice(1) !== tab) {
+          history.replaceState(null, "", "#" + tab);
+          if (window.refreshSidebar) refreshSidebar();
+        }
       }
+
+      // 사이드바에서 상태 진단 / 임계치 변경을 누르면 해당 탭으로
+      function openTabFromHash() {
+        switchTab(location.hash === "#threshold" ? "threshold" : "diagnose");
+      }
+      window.addEventListener("hashchange", openTabFromHash);
+      openTabFromHash();
 
       // AI 진단 실행
       async function runDiagnose() {
