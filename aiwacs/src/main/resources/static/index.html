@@ -198,29 +198,6 @@
         color: #fff;
         border-color: #3f6ad8;
       }
-      /* 자동 전환: 선택된 탭 아래 막대가 10초 동안 차오름 */
-      .map-tab[data-metric] {
-        position: relative;
-        overflow: hidden;
-      }
-      .map-tab .progress {
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        height: 2px;
-        width: 0;
-        background: rgba(255, 255, 255, 0.85);
-      }
-      .map-tab.active .progress.run {
-        animation: tab-progress 10s linear forwards;
-      }
-      .map-tab.active .progress.paused {
-        animation-play-state: paused;
-      }
-      @keyframes tab-progress {
-        from { width: 0; }
-        to { width: 100%; }
-      }
       /* 전환 모션: 왼쪽으로 사라지고 오른쪽에서 들어옴 */
       .slide {
         transition: transform 0.3s ease, opacity 0.3s ease;
@@ -1031,7 +1008,6 @@
       let rotatePaused = false;
 
       document.querySelectorAll(".map-tab[data-metric]").forEach((tab) => {
-        tab.insertAdjacentHTML("beforeend", '<span class="progress"></span>');
         // 직접 누르면 그 탭으로 가고 10초를 처음부터 다시 셈
         tab.addEventListener("click", () => {
           if (tab.dataset.metric !== currentTab) selectMetric(tab.dataset.metric);
@@ -1068,14 +1044,7 @@
 
       function restartRotation() {
         rotateLeft = ROTATE_MS;
-        // 진행 막대 애니메이션을 처음부터 다시
-        document.querySelectorAll(".map-tab .progress").forEach((p) => {
-          p.classList.remove("run", "paused");
-          void p.offsetWidth;
-        });
-        document.querySelector(`.map-tab[data-metric="${currentTab}"] .progress`)?.classList.add("run");
         if (rotatePaused) {
-          document.querySelectorAll(".map-tab .progress").forEach((p) => p.classList.add("paused"));
           clearTimeout(rotateTimer);
           return;
         }
@@ -1094,11 +1063,9 @@
         rotatePaused = true;
         clearTimeout(rotateTimer);
         rotateLeft = Math.max(0, rotateLeft - (Date.now() - rotateStartedAt));
-        document.querySelectorAll(".map-tab .progress").forEach((p) => p.classList.add("paused"));
       });
       mapPanel.addEventListener("mouseleave", () => {
         rotatePaused = false;
-        document.querySelectorAll(".map-tab .progress").forEach((p) => p.classList.remove("paused"));
         scheduleRotation();
       });
       restartRotation();
