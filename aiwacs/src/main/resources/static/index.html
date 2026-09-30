@@ -68,6 +68,57 @@
       .topbar-right b {
         color: #3f6ad8;
       }
+      /* 상단바 아이콘 (AiWACS식: Agent / 알림(종) / 계정) */
+      .tb-icons { display: flex; align-items: center; gap: 14px; margin-left: 10px; }
+      .tb-icon {
+        position: relative; width: 32px; height: 32px; border: none; background: none;
+        color: #6b7280; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        border-radius: 8px;
+      }
+      .tb-icon:hover { background: #f2f4f8; color: #3f6ad8; }
+      .tb-icon svg { width: 19px; height: 19px; }
+      .tb-badge {
+        position: absolute; top: 2px; right: 2px; background: #d64545; color: #fff;
+        font-size: 9px; font-weight: 800; min-width: 15px; height: 15px; line-height: 15px;
+        border-radius: 8px; padding: 0 3px; text-align: center;
+      }
+      .tb-pop {
+        position: absolute; top: 52px; right: 16px; width: 380px; max-width: calc(100vw - 32px);
+        max-height: 74vh; overflow-y: auto; background: #fff; border: 1px solid #e3e6ec;
+        border-radius: 10px; box-shadow: 0 10px 34px rgba(23,32,64,0.16); z-index: 40;
+      }
+      .tb-pop .pop-h {
+        padding: 12px 16px; border-bottom: 1px solid #eef0f4; font-weight: 700;
+        color: #3a3f52; font-size: 13px; display: flex; justify-content: space-between; align-items: center;
+      }
+      .tb-pop .pop-b { padding: 14px 16px; }
+      .al-row {
+        display: flex; align-items: center; gap: 8px; padding: 9px 0;
+        border-bottom: 1px dashed #eef0f4; font-size: 12.5px; color: #3a4055;
+      }
+      .al-row:last-child { border-bottom: none; }
+      .al-row b { color: #232838; }
+      .al-lv { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+      .lv-주의 { background: #fbf1da; color: #c9820a; }
+      .lv-경고 { background: #fbe6d6; color: #c9600a; }
+      .lv-위험 { background: #fbe9e9; color: #d64545; }
+      .lv-장애 { background: #f6d7d7; color: #a02020; }
+      .al-actions { display: flex; gap: 8px; margin: 12px 0 4px; }
+      .al-btn {
+        flex: 1; padding: 8px 10px; border-radius: 8px; border: none; background: #3f6ad8;
+        color: #fff; font-size: 12px; font-weight: 600; cursor: pointer;
+      }
+      .al-btn:hover { background: #2f52b0; }
+      .al-btn.ghost { background: #f2f4f8; color: #3a3f52; border: 1px solid #d5d9e2; }
+      .al-btn.ghost:hover { background: #e6eaf1; }
+      .al-event { border: 1px solid #e3e6ec; border-radius: 9px; padding: 11px 13px; margin-top: 10px; background: #f8f9fc; }
+      .al-event .ev-h { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+      .al-event .ev-h .ev-t { font-weight: 700; color: #232838; font-size: 12.5px; }
+      .al-event .ev-k { color: #9098aa; font-weight: 700; font-size: 11px; margin-top: 6px; }
+      .al-event .ev-v { color: #3a4055; font-size: 12px; }
+      .al-empty { color: #9098aa; font-size: 12.5px; padding: 6px 0; }
+      .al-note { color: #9aa1b2; font-size: 11px; margin-top: 10px; }
+      .pop-agent-b, .pop-account-b { font-size: 12.5px; color: #3a4055; line-height: 1.7; }
       .content {
         padding: 16px;
         display: grid;
@@ -439,6 +490,54 @@
             >
               <option value="">Company</option>
             </select>
+            <div class="tb-icons">
+              <button class="tb-icon" title="Agent 다운로드" onclick="togglePop('pop-agent')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              </button>
+              <button class="tb-icon" title="알림" onclick="togglePop('pop-alarm')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="tb-badge" id="alarm-badge" hidden>0</span>
+              </button>
+              <button class="tb-icon" title="계정" onclick="togglePop('pop-account')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent 팝오버 -->
+        <div class="tb-pop" id="pop-agent" hidden>
+          <div class="pop-h">Agent 다운로드</div>
+          <div class="pop-b pop-agent-b">
+            모니터링 대상 서버에 설치할 Agent를 내려받습니다.<br />
+            설치 후 <b>server.url</b>을 이 서버로 지정하면 자동 등록됩니다.<br />
+            <span style="color:#9aa1b2">(데모 화면 — 실제 배포 파일은 환경설정 &gt; Agent 다운로드)</span>
+          </div>
+        </div>
+
+        <!-- 알림(종) 팝오버 -->
+        <div class="tb-pop" id="pop-alarm" hidden>
+          <div class="pop-h">
+            <span>알림 <span id="pop-alarm-count">0</span>건</span>
+            <button class="al-btn ghost" style="flex:none;padding:3px 10px" onclick="loadAlarms()">새로고침</button>
+          </div>
+          <div class="pop-b">
+            <div id="alarm-list"><div class="al-empty">불러오는 중…</div></div>
+            <div class="al-actions">
+              <button class="al-btn" onclick="groupAlarmsUI(false)">AI로 한 사건으로 묶기</button>
+              <button class="al-btn ghost" onclick="groupAlarmsUI(true)">부하 시나리오</button>
+            </div>
+            <div id="alarm-grouped"></div>
+          </div>
+        </div>
+
+        <!-- 계정 팝오버 -->
+        <div class="tb-pop" id="pop-account" hidden>
+          <div class="pop-h">계정</div>
+          <div class="pop-b pop-account-b">
+            <b>aiwacs</b> 님<br />
+            역할: 관제 운영자<br />
+            <span style="color:#9aa1b2">(데모 화면)</span>
           </div>
         </div>
 
@@ -1188,6 +1287,74 @@
       setInterval(loadHistory, 60000);
       loadDays();
       setInterval(loadDays, 10 * 60000); // 자정이 지나면 날짜 목록 갱신
+    </script>
+    <script>
+      // ===== 상단바 아이콘: Agent / 알림(종) / 계정 + AI 알림 그룹핑 =====
+      function togglePop(id) {
+        document.querySelectorAll(".tb-pop").forEach((p) => {
+          p.hidden = p.id !== id ? true : !p.hidden;
+        });
+      }
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".tb-pop") && !e.target.closest(".tb-icon")) {
+          document.querySelectorAll(".tb-pop").forEach((p) => (p.hidden = true));
+        }
+      });
+      function alEsc(s) {
+        return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+      function alLv(l) {
+        return "al-lv lv-" + (l || "주의");
+      }
+      function renderAlarmList(list, demo) {
+        const badge = document.getElementById("alarm-badge");
+        document.getElementById("pop-alarm-count").textContent = list.length;
+        if (list.length) { badge.hidden = false; badge.textContent = list.length; } else { badge.hidden = true; }
+        const box = document.getElementById("alarm-list");
+        if (!list.length) {
+          box.innerHTML = '<div class="al-empty">현재 발생한 알림이 없습니다. "부하 시나리오"로 데모를 볼 수 있습니다.</div>';
+          return;
+        }
+        box.innerHTML =
+          (demo ? '<div class="al-note" style="margin:0 0 8px">부하 시나리오(데모) 알림</div>' : "") +
+          list.map((a) =>
+            `<div class="al-row"><span class="${alLv(a.level)}">${alEsc(a.level)}</span> <b>${alEsc(a.server)}</b> · ${alEsc(a.metric)}<span style="margin-left:auto;color:#7a8194">${alEsc(a.value)}</span></div>`
+          ).join("");
+      }
+      async function loadAlarms() {
+        try {
+          const list = await (await fetch("/api/ai/alarms")).json();
+          renderAlarmList(list, false);
+        } catch (e) {
+          document.getElementById("alarm-list").innerHTML = '<div class="al-empty">알림을 불러오지 못했습니다.</div>';
+        }
+      }
+      async function groupAlarmsUI(demo) {
+        const out = document.getElementById("alarm-grouped");
+        out.innerHTML = '<div class="al-empty">AI가 사건 단위로 묶는 중…</div>';
+        try {
+          const d = await (await fetch("/api/ai/alarm-group", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demo }) })).json();
+          if (!d.ok) { out.innerHTML = `<div class="al-empty" style="color:#a03535">${alEsc(d.reply)}</div>`; return; }
+          renderAlarmList(d.alarms || [], d.source === "demo");
+          const events = (d.result && d.result.events) || [];
+          if (!events.length) { out.innerHTML = '<div class="al-empty">묶을 사건이 없습니다.</div>'; return; }
+          out.innerHTML =
+            '<div style="font-weight:700;color:#3a3f52;font-size:12px;margin-top:12px">AI 묶음 ' + events.length + "건</div>" +
+            events.map((e) =>
+              `<div class="al-event">
+                <div class="ev-h"><span class="${alLv(e.level)}">${alEsc(e.level)}</span><span class="ev-t">${alEsc(e.title)}</span><span style="margin-left:auto;color:#9098aa;font-size:11px">관련 ${alEsc(e.count || (e.members ? e.members.length : 0))}건</span></div>
+                <div class="ev-k">묶인 알림</div><div class="ev-v">${(e.members || []).map(alEsc).join(" · ")}</div>
+                <div class="ev-k">원인 추정</div><div class="ev-v">${alEsc(e.cause)}</div>
+                <div class="ev-k">권장 조치</div><div class="ev-v">${alEsc(e.action)}</div>
+              </div>`
+            ).join("") +
+            `<div class="al-note">AiWACS 원본 ${(d.alarms || []).length}건은 그대로 두고, ${events.length}개 사건으로 접어 보여줍니다.</div>`;
+        } catch (e) {
+          out.innerHTML = '<div class="al-empty" style="color:#a03535">묶기 중 오류가 발생했습니다.</div>';
+        }
+      }
+      loadAlarms();
+      setInterval(loadAlarms, 10000);
     </script>
   </body>
 </html>
