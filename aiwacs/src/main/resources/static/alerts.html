@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AiWACS - 알림 내역</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: #eef0f4; color: #333; font-size: 13px; }
+      .layout { display: flex; min-height: 100vh; }
+      .sidebar { width: 190px; background: #fff; border-right: 1px solid #e3e6ec; flex-shrink: 0; }
+      .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+      .topbar { background: #fff; border-bottom: 1px solid #e3e6ec; padding: 10px 22px; display: flex; justify-content: space-between; align-items: center; }
+      .breadcrumb { color: #7a8194; font-size: 12px; }
+      .breadcrumb b { color: #3f6ad8; }
+      .topbar-right { color: #7a8194; font-size: 12px; }
+      .topbar-right b { color: #3f6ad8; }
+      .content { padding: 20px 22px; }
+      .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .bar .grow { flex: 1; }
+      .btn { padding: 8px 16px; background: #3f6ad8; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      .btn:hover { background: #2f52b0; }
+      .btn.ghost { background: #fff; color: #3a3f52; border: 1px solid #d5d9e2; }
+      .btn.ghost:hover { background: #f2f4f8; }
+      input[type=text] { font-family: inherit; font-size: 13px; border: 1px solid #d5d9e2; border-radius: 8px; padding: 8px 11px; min-width: 220px; }
+      .card { background: #fff; border: 1px solid #e3e6ec; border-radius: 10px; box-shadow: 0 1px 2px rgba(23,32,64,0.04); }
+      .card-head { padding: 12px 16px; border-bottom: 1px solid #eef0f4; font-weight: 700; color: #3a3f52; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+      .card-head .cnt { color: #3f6ad8; }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      th { text-align: left; color: #9098aa; font-weight: 600; font-size: 11.5px; padding: 9px 12px; border-bottom: 1px solid #e3e6ec; white-space: nowrap; }
+      td { padding: 9px 12px; border-bottom: 1px solid #eef0f4; white-space: nowrap; }
+      tr:last-child td { border-bottom: none; }
+      td.dev { font-weight: 600; color: #232838; }
+      .mono { font-family: "Consolas", monospace; font-variant-numeric: tabular-nums; }
+      .lv { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+      .lv-주의 { background: #fbf1da; color: #c9820a; }
+      .lv-경고 { background: #fbe6d6; color: #c9600a; }
+      .lv-위험 { background: #fbe9e9; color: #d64545; }
+      .lv-장애 { background: #f6d7d7; color: #a02020; }
+      .st { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+      .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+      .st-ACTIVE { background: #fbe9e9; color: #d64545; }
+      .st-RESOLVED { background: #eef0f3; color: #6b7280; }
+      .st-HANDLED { background: #e7f4ec; color: #1f9d57; }
+      .empty { padding: 26px; text-align: center; color: #9098aa; font-size: 12.5px; }
+      /* AI 묶음 */
+      .grp { margin-top: 16px; }
+      .event { border: 1px solid #e3e6ec; border-radius: 10px; padding: 14px 16px; margin-top: 10px; background: #f8f9fc; }
+      .event .eh { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .event .eh .et { font-weight: 700; color: #232838; }
+      .event .ek { color: #9098aa; font-weight: 700; font-size: 11px; margin-top: 6px; }
+      .event .ev { color: #3a4055; font-size: 12.5px; }
+      .note { color: #9aa1b2; font-size: 11px; margin-top: 10px; }
+      .loading { padding: 20px; color: #9098aa; text-align: center; }
+      .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(16px); background: #232838; color: #fff; padding: 11px 20px; border-radius: 10px; font-size: 13px; opacity: 0; pointer-events: none; transition: all .28s; z-index: 50; }
+      .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      @media (max-width: 720px) { .sidebar { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar"></aside>
+      <script src="/sidebar.js"></script>
+      <div class="main">
+        <div class="topbar">
+          <div class="breadcrumb">홈 &gt; 알림 &gt; <b>알림 내역</b></div>
+          <div class="topbar-right"><b>aiwacs</b>님, 환영합니다.</div>
+        </div>
+        <div class="content">
+          <div class="bar">
+            <button class="btn ghost" onclick="load()">새로고침</button>
+            <button class="btn" onclick="groupActive()">AI로 사건 묶기</button>
+            <span class="grow"></span>
+            <input type="text" id="note" placeholder="처리 내용 (선택 후 입력)" />
+            <button class="btn ghost" onclick="handleSelected()">선택 처리</button>
+          </div>
+
+          <div class="card">
+            <div class="card-head">알림 내역 <span class="cnt" id="total">0</span>건 · 발생 중 <span class="cnt" id="activeCnt">0</span>건</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="chkAll" onclick="toggleAll(this)" /></th>
+                    <th>상태</th><th>장비</th><th>고객사</th><th>지표</th><th>레벨</th>
+                    <th>현재값</th><th>발생 시간</th><th>최종 발생</th><th>지속(초)</th><th>발생횟수</th>
+                  </tr>
+                </thead>
+                <tbody id="rows"><tr><td colspan="11" class="empty">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="grp" id="grp"></div>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const lvClass = (l) => "lv lv-" + (l || "주의");
+      const stKr = { ACTIVE: "발생", RESOLVED: "해제", HANDLED: "처리완료" };
+      let toastTimer;
+      function toast(m) { const t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600); }
+
+      async function load() {
+        try {
+          const list = await (await fetch("/api/alarms/history")).json();
+          const active = list.filter((a) => a.status === "ACTIVE").length;
+          document.getElementById("total").textContent = list.length;
+          document.getElementById("activeCnt").textContent = active;
+          const tb = document.getElementById("rows");
+          if (!list.length) { tb.innerHTML = '<tr><td colspan="11" class="empty">발생한 알림이 없습니다. 서버에 부하가 걸리면 여기에 쌓입니다.</td></tr>'; return; }
+          tb.innerHTML = list.map((a) => `<tr>
+            <td>${a.status === "ACTIVE" ? `<input type="checkbox" class="rowchk" value="${a.id}" />` : ""}</td>
+            <td><span class="st st-${a.status}">${stKr[a.status] || a.status}</span></td>
+            <td class="dev">${esc(a.server)}</td>
+            <td>${esc(a.company) || "-"}</td>
+            <td>${esc(a.metric)}</td>
+            <td><span class="${lvClass(a.level)}">${esc(a.level)}</span></td>
+            <td class="mono">${esc(a.value)}</td>
+            <td class="mono">${esc(a.firstAt)}</td>
+            <td class="mono">${esc(a.lastAt)}</td>
+            <td class="mono">${esc(a.durationSec)}</td>
+            <td class="mono">${esc(a.count)}</td>
+          </tr>`).join("");
+        } catch (e) {
+          document.getElementById("rows").innerHTML = '<tr><td colspan="11" class="empty">불러오지 못했습니다.</td></tr>';
+        }
+      }
+      function toggleAll(el) { document.querySelectorAll(".rowchk").forEach((c) => (c.checked = el.checked)); }
+      function selectedIds() { return [...document.querySelectorAll(".rowchk:checked")].map((c) => Number(c.value)); }
+
+      async function handleSelected() {
+        const ids = selectedIds();
+        if (!ids.length) { toast("처리할 알림을 선택하세요."); return; }
+        const note = document.getElementById("note").value;
+        try {
+          const d = await (await fetch("/api/alarms/handle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, note }) })).json();
+          toast(`${d.handled}건 처리했습니다.`);
+          document.getElementById("note").value = "";
+          load();
+        } catch (e) { toast("처리 중 오류가 발생했습니다."); }
+      }
+
+      async function groupActive() {
+        const grp = document.getElementById("grp");
+        grp.innerHTML = '<div class="loading">AI가 발생 알림을 사건 단위로 묶는 중…</div>';
+        try {
+          const d = await (await fetch("/api/ai/alarm-group", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demo: false }) })).json();
+          if (!d.ok) { grp.innerHTML = `<div class="card"><div class="empty" style="color:#a03535">${esc(d.reply)}</div></div>`; return; }
+          const events = (d.result && d.result.events) || [];
+          const raw = (d.alarms || []).length;
+          if (!events.length) { grp.innerHTML = '<div class="card"><div class="empty">현재 묶을 발생 알림이 없습니다.</div></div>'; return; }
+          grp.innerHTML = `<div class="card"><div class="card-head">AI 사건 묶음 <span class="cnt">${events.length}</span>건 <span style="color:#9098aa;font-weight:400;font-size:12px">(원본 ${raw}건 → ${events.length}사건)</span></div>
+            <div style="padding:14px 16px">${events.map((e) => `
+              <div class="event">
+                <div class="eh"><span class="${lvClass(e.level)}">${esc(e.level)}</span><span class="et">${esc(e.title)}</span><span style="margin-left:auto;color:#9098aa;font-size:11px">관련 ${esc(e.count || (e.members ? e.members.length : 0))}건</span></div>
+                <div class="ek">묶인 알림</div><div class="ev">${(e.members || []).map(esc).join(" · ")}</div>
+                <div class="ek">원인 추정</div><div class="ev">${esc(e.cause)}</div>
+                <div class="ek">권장 조치</div><div class="ev">${esc(e.action)}</div>
+              </div>`).join("")}
+              <div class="note">AiWACS 원본 ${raw}건은 그대로 두고, ${events.length}개 사건으로 접어 보여줍니다. (탐지·판정은 그대로)</div>
+            </div></div>`;
+        } catch (e) { grp.innerHTML = '<div class="card"><div class="empty" style="color:#a03535">묶기 중 오류가 발생했습니다.</div></div>'; }
+      }
+
+      load();
+      setInterval(load, 5000);
+    </script>
+  </body>
+</html>

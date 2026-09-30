@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import com.sysone.aiwacs.alarm.AlarmService;
 import com.sysone.aiwacs.policy.PolicyService;
 import com.sysone.aiwacs.policy.PolicyService.ChangeResult;
 import com.sysone.aiwacs.server.AgentReport;
@@ -31,11 +32,14 @@ public class AiService {
     private final GeminiClient gemini;
     private final PolicyService policyService;
     private final ServerService servers;
+    private final AlarmService alarmService;
 
-    public AiService(GeminiClient gemini, PolicyService policyService, ServerService servers) {
+    public AiService(GeminiClient gemini, PolicyService policyService, ServerService servers,
+                     AlarmService alarmService) {
         this.gemini = gemini;
         this.policyService = policyService;
         this.servers = servers;
+        this.alarmService = alarmService;
     }
 
     // ===== AI 임계치 변경 (기업+정책 지정, 여러 개 동시 가능) =====
@@ -306,31 +310,9 @@ public class AiService {
         return demo ? demoAlarms() : currentAlarms();
     }
 
-    /** 현재 판정 기준으로 주의·위험인 서버·지표를 알림 목록으로 (실데이터) */
+    /** 현재 발생 중인 실제 알람 (알람 엔진 기준) */
     private List<Map<String, Object>> currentAlarms() {
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (MonitoredServer s : servers.findAll()) {
-            if (!servers.isOnline(s.getId())) {
-                continue;
-            }
-            Map<String, Map<String, Object>> judged = servers.judge(s.getId()).orElse(null);
-            if (judged == null) {
-                continue;
-            }
-            judged.forEach((metric, m) -> {
-                String status = String.valueOf(m.get("status"));
-                if (!"정상".equals(status)) {
-                    Map<String, Object> a = new LinkedHashMap<>();
-                    a.put("server", s.label());
-                    a.put("company", s.getCompany());
-                    a.put("metric", METRIC_KR2.getOrDefault(metric, metric));
-                    a.put("level", status);
-                    a.put("value", m.get("value"));
-                    out.add(a);
-                }
-            });
-        }
-        return out;
+        return alarmService.activeAlarms();
     }
 
     /** 부하 실험에서 실제로 관찰한 알림 세트 (CPU 한 사건이 세 지표로 분리되어 뜬 상황) */

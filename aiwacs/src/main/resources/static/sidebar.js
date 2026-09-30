@@ -21,7 +21,13 @@
     { label: "추적" },
     { label: "서비스" },
     { label: "로그 조회" },
-    { label: "알림" },
+    {
+      label: "알림",
+      children: [
+        { label: "알림 내역", href: "/alerts" },
+        { label: "처리 내역", href: "/alerts/handled" },
+      ],
+    },
     { label: "장비 비교/분석" },
     { label: "보고서" },
     { label: "장비 모니터링" },
