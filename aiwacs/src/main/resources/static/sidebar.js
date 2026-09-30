@@ -44,6 +44,12 @@
   ];
 
   const STYLE = `
+    /* 로고 크기를 모든 화면에서 통일 (페이지마다 .logo 스타일이 없어 작아지던 문제 방지) */
+    .sidebar .logo {
+      padding: 16px 18px; font-size: 18px; font-weight: 800;
+      letter-spacing: -0.02em; border-bottom: 1px solid #eef0f4; cursor: pointer;
+      line-height: 1.2;
+    }
     .sidebar .logo .logo-ai { color: #f08c00; }   /* 로고: Ai는 주황 */
     .sidebar .logo .logo-wacs { color: #111; }    /* WACS는 검정 */
     .sidebar .menu { padding: 8px 0; }
