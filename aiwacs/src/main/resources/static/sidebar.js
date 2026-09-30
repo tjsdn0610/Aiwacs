@@ -12,6 +12,11 @@
       label: "AI 운영 도우미",
       children: [
         { label: "운영 브리핑", href: "/ai#briefing" },
+        { label: "원인 추적", href: "/ai#rootcause" },
+        { label: "처리내역 초안", href: "/ai#note" },
+        { label: "정책 튜닝", href: "/ai#tuning" },
+        { label: "서술형 보고서", href: "/ai#report" },
+        { label: "자연어 질의", href: "/ai#query" },
         { label: "상태 진단", href: "/ai#diagnose" },
         { label: "임계치 변경", href: "/ai#threshold" },
       ],

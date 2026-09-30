@@ -162,6 +162,49 @@ public class MetricHistoryService {
         }).toList();
     }
 
+    /**
+     * 최근 days일(오늘 포함)의 1분 평균 이력에서 지표별 [평균, 최대, 최소, 표본수]를 계산한다.
+     * 정책 튜닝·서술형 보고서에서 "실측 vs 임계치" 비교에 쓴다. 이력이 없으면 빈 맵.
+     */
+    public Map<String, double[]> stats(Long serverId, int days) {
+        int span = Math.min(Math.max(1, days), retentionDays);
+        LocalDate today = LocalDate.now(ZONE);
+        List<MetricHistory> rows = new ArrayList<>();
+        for (int i = 0; i < span; i++) {
+            LocalDate d = today.minusDays(i);
+            Instant from = d.atStartOfDay(ZONE).toInstant();
+            Instant to = d.plusDays(1).atStartOfDay(ZONE).toInstant();
+            rows.addAll(repository.findByServerIdAndTimeGreaterThanEqualAndTimeLessThanOrderByTimeAsc(serverId, from, to));
+        }
+        synchronized (current) {
+            Bucket b = current.get(serverId);
+            if (b != null) {
+                rows.add(b.average(serverId));
+            }
+        }
+        Map<String, double[]> out = new LinkedHashMap<>();
+        if (rows.isEmpty()) {
+            return out;
+        }
+        for (String m : List.of("cpu", "memory", "disk")) {
+            double sum = 0, max = 0, min = 100;
+            int n = 0;
+            for (MetricHistory h : rows) {
+                double v = switch (m) {
+                    case "cpu" -> h.getCpu();
+                    case "memory" -> h.getMemory();
+                    default -> h.getDisk();
+                };
+                sum += v;
+                if (v > max) max = v;
+                if (v < min) min = v;
+                n++;
+            }
+            out.put(m, new double[] {round1(sum / n), round1(max), round1(min), n});
+        }
+        return out;
+    }
+
     /** 실시간 그래프용 최근 원본 값 (오래된 순, 최대 40개) */
     public List<Map<String, Object>> recent(Long serverId) {
         List<Point> points;

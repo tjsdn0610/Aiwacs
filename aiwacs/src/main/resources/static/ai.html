@@ -5,429 +5,190 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AiWACS - AI 운영 도우미</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
         font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
         background: #eef0f4;
         color: #333;
         font-size: 13px;
       }
-      .layout {
-        display: flex;
-        min-height: 100vh;
-      }
-      .sidebar {
-        width: 170px;
-        background: #fff;
-        border-right: 1px solid #e3e6ec;
-        flex-shrink: 0;
-      }
-      .logo {
-        padding: 16px 18px;
-        font-size: 18px;
-        font-weight: 800;
-        color: #1b2140;
-        border-bottom: 1px solid #eef0f4;
-      }
-      .logo span {
-        color: #3f6ad8;
-      }
-      .main {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-      }
+      .layout { display: flex; min-height: 100vh; }
+      .sidebar { width: 190px; background: #fff; border-right: 1px solid #e3e6ec; flex-shrink: 0; }
+      .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
       .topbar {
-        background: #fff;
-        border-bottom: 1px solid #e3e6ec;
-        padding: 10px 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        background: #fff; border-bottom: 1px solid #e3e6ec; padding: 10px 22px;
+        display: flex; justify-content: space-between; align-items: center;
       }
-      .breadcrumb {
-        color: #7a8194;
-        font-size: 12px;
+      .breadcrumb { color: #7a8194; font-size: 12px; }
+      .breadcrumb b { color: #3f6ad8; }
+      .topbar-right { color: #7a8194; font-size: 12px; display: flex; gap: 16px; align-items: center; }
+      .topbar-right .clock { font-variant-numeric: tabular-nums; }
+      .topbar-right b { color: #3f6ad8; }
+
+      .content { padding: 20px 22px; max-width: 1080px; width: 100%; }
+      .page-head { margin-bottom: 16px; }
+      .page-head .eyebrow {
+        font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: #3f6ad8; font-weight: 700; margin-bottom: 2px;
       }
-      .breadcrumb b {
-        color: #3f6ad8;
+      .page-head h1 { font-size: 20px; color: #232838; letter-spacing: -0.01em; }
+      .page-head p { color: #9098aa; font-size: 12.5px; margin-top: 3px; }
+
+      /* 서브탭 */
+      .subtabs {
+        display: flex; gap: 2px; flex-wrap: wrap;
+        border-bottom: 1px solid #e3e6ec; margin-bottom: 18px;
       }
-      .topbar-right {
-        color: #7a8194;
-        font-size: 12px;
+      .subtab {
+        padding: 9px 14px; font-size: 12.5px; color: #7a8194;
+        background: none; border: none; border-bottom: 2px solid transparent;
+        cursor: pointer; margin-bottom: -1px; white-space: nowrap;
       }
-      .topbar-right b {
-        color: #3f6ad8;
-      }
-      .content {
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-      .ai-panel {
-        background: #fff;
-        border: 1px solid #e3e6ec;
-        border-radius: 8px;
-        width: 100%;
-        max-width: 760px;
-        overflow: hidden;
-      }
-      .ai-head {
-        padding: 16px 20px;
-        border-bottom: 1px solid #eef0f4;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .ai-head .title {
-        font-weight: 700;
-        color: #3a3f52;
-        font-size: 15px;
-      }
-      .ai-head .badge {
-        background: #e8b24a;
-        color: #3a2a00;
-        font-size: 10px;
-        font-weight: 800;
-        padding: 2px 8px;
-        border-radius: 10px;
-      }
-      .ai-head .sub {
-        color: #9098aa;
-        font-size: 12px;
-      }
-      .current {
-        padding: 14px 20px;
-        background: #f8f9fc;
-        border-bottom: 1px solid #eef0f4;
-        max-height: 130px;
-        overflow-y: auto;
-      }
-      .current .clabel {
-        font-size: 11px;
-        color: #9098aa;
-        margin-bottom: 8px;
-      }
-      .pol-item {
-        font-size: 12px;
-        padding: 5px 0;
-        border-bottom: 1px dashed #eef0f4;
-      }
-      .pol-item:last-child {
-        border: none;
-      }
-      .pol-item .company-tag {
-        background: #eaf0fb;
-        color: #3f6ad8;
-        padding: 1px 7px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        margin-right: 6px;
-      }
-      .pol-item .vals {
-        color: #7a8194;
-      }
-      .chat {
-        height: 300px;
-        overflow-y: auto;
-        padding: 16px 20px;
-      }
-      .msg {
-        margin-bottom: 14px;
-        display: flex;
-      }
-      .msg.user {
-        justify-content: flex-end;
-      }
-      .bubble {
-        max-width: 75%;
-        padding: 10px 14px;
-        border-radius: 12px;
-        font-size: 13px;
-        line-height: 1.5;
-      }
-      .msg.user .bubble {
-        background: #3f6ad8;
-        color: #fff;
-        border-bottom-right-radius: 3px;
-      }
-      .msg.ai .bubble {
-        background: #f0f2f6;
-        color: #3a3f52;
-        border-bottom-left-radius: 3px;
-      }
-      .msg.ai.ok .bubble {
-        background: #eaf3ec;
-        color: #256e3a;
-        border: 1px solid #cfe6d5;
-      }
-      .msg.ai.fail .bubble {
-        background: #fbeeee;
-        color: #a03535;
-        border: 1px solid #f0d5d5;
-      }
-      .hint {
-        color: #b0b6c4;
-        font-size: 12px;
-        text-align: center;
-        margin-top: 30px;
-        line-height: 1.8;
-      }
-      .hint .ex {
-        display: inline-block;
-        background: #f0f2f6;
-        color: #5a6072;
-        padding: 4px 10px;
-        border-radius: 12px;
-        margin: 3px;
-        cursor: pointer;
-      }
-      .hint .ex:hover {
-        background: #e3e8f2;
-      }
-      .input-row {
-        padding: 14px 20px;
-        border-top: 1px solid #eef0f4;
-        display: flex;
-        gap: 8px;
-      }
-      .input-row input {
-        flex: 1;
-        padding: 10px 14px;
-        border: 1px solid #d5d9e2;
-        border-radius: 20px;
-        font-size: 13px;
-        outline: none;
-      }
-      .input-row input:focus {
-        border-color: #3f6ad8;
-      }
-      .input-row button {
-        padding: 10px 20px;
-        background: #3f6ad8;
-        color: #fff;
-        border: none;
-        border-radius: 20px;
-        cursor: pointer;
-        font-size: 13px;
-      }
-      .input-row button:disabled {
-        background: #b0b6c4;
+      .subtab:hover { color: #3a3f52; }
+      .subtab.active { color: #3f6ad8; font-weight: 700; border-bottom-color: #3f6ad8; }
+      .subtab .tag {
+        background: #f08c00; color: #3a2400; font-size: 9px; font-weight: 800;
+        padding: 1px 5px; border-radius: 8px; margin-left: 5px; vertical-align: middle;
       }
 
-      /* 상단 탭 */
-      .top-tabs {
-        display: flex;
-        gap: 4px;
-        margin-bottom: 16px;
-        width: 100%;
-        max-width: 760px;
-      }
-      .top-tab {
-        padding: 10px 20px;
-        background: #e3e6ec;
-        color: #7a8194;
-        border-radius: 8px 8px 0 0;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 13px;
-      }
-      .top-tab.active {
-        background: #fff;
-        color: #3f6ad8;
-        border: 1px solid #e3e6ec;
-        border-bottom: none;
-      }
+      .view { display: none; }
+      .view.active { display: block; animation: fade 0.2s ease; }
+      @keyframes fade { from { opacity: 0; } }
 
-      /* 진단 패널 */
-      .diag-body {
-        padding: 24px 20px;
-        text-align: center;
+      .card {
+        background: #fff; border: 1px solid #e3e6ec; border-radius: 10px;
+        box-shadow: 0 1px 2px rgba(23,32,64,0.04);
       }
-      .diag-btn {
-        padding: 12px 32px;
-        background: #3f6ad8;
-        color: #fff;
-        border: none;
-        border-radius: 24px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 600;
+      .card + .card, .card + .ai-card, .ai-card + .card { margin-top: 14px; }
+      .card-head {
+        padding: 13px 18px; border-bottom: 1px solid #eef0f4;
+        display: flex; align-items: center; gap: 10px;
       }
-      .diag-btn:disabled {
-        background: #b0b6c4;
+      .card-head h2 { font-size: 14px; color: #3a3f52; }
+      .card-head .sub { color: #9098aa; font-size: 12px; font-weight: 400; }
+      .card-body { padding: 18px; }
+
+      /* 컨트롤 바 */
+      .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+      .controls .lbl { color: #7a8194; }
+      select, input[type=text], textarea {
+        font-family: inherit; font-size: 13px; color: #232838; background: #fff;
+        border: 1px solid #d5d9e2; border-radius: 8px; padding: 8px 11px;
       }
-      .diag-server {
-        padding: 11px 14px;
-        margin-right: 8px;
-        border: 1px solid #e3e6ec;
-        border-radius: 24px;
-        font-size: 13px;
-        color: #3a3f52;
-        background: #fff;
-        vertical-align: middle;
+      select:focus, input:focus, textarea:focus { outline: none; border-color: #3f6ad8; }
+      .btn {
+        display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px;
+        background: #3f6ad8; color: #fff; border: none; border-radius: 8px;
+        font-size: 13px; font-weight: 600; cursor: pointer;
       }
-      .diag-result {
-        margin-top: 20px;
-        text-align: left;
+      .btn:hover { background: #2f52b0; }
+      .btn:disabled { background: #b0b6c4; cursor: default; }
+      .btn.sm { padding: 5px 12px; font-size: 12px; border-radius: 7px; }
+      .btn.ghost { background: #f2f4f8; color: #3a3f52; border: 1px solid #d5d9e2; }
+      .btn.ghost:hover { background: #e6eaf1; }
+      .hint { color: #9aa1b2; font-size: 12px; margin-top: 6px; }
+      .loading { color: #9098aa; padding: 22px; text-align: center; font-size: 12.5px; }
+      .demo { font-size: 11px; color: #9098aa; }
+
+      /* 집계 타일 */
+      .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px; }
+      .tile { background: #fff; border: 1px solid #e3e6ec; border-radius: 10px; padding: 13px 15px; }
+      .tile .num { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .tile .lab { font-size: 11px; color: #9098aa; margin-top: 2px; }
+      .tile.crit { border-top: 3px solid #d64545; }
+      .tile.warn { border-top: 3px solid #c9820a; }
+      .tile.ok { border-top: 3px solid #1f9d57; }
+      .tile.down { border-top: 3px solid #6b7280; }
+
+      /* 상태 배지 */
+      .lv { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+      .lv::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+      .lv-정상 { background: #e7f4ec; color: #1f9d57; }
+      .lv-주의 { background: #fbf1da; color: #c9820a; }
+      .lv-위험 { background: #fbe9e9; color: #d64545; }
+      .lv-오프라인 { background: #eef0f3; color: #6b7280; }
+
+      /* AI 결과 카드 */
+      .ai-card { background: #f8f9fc; border: 1px solid #e3e6ec; border-radius: 10px; padding: 18px; }
+      .ai-level { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 12.5px; padding: 4px 12px; border-radius: 16px; margin-bottom: 12px; }
+      .rb { margin-bottom: 13px; }
+      .rb:last-child { margin-bottom: 0; }
+      .r-label { font-weight: 800; font-size: 11.5px; color: #3f6ad8; margin-bottom: 4px; }
+      .r-text { color: #3a3f52; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+      .r-text ul { margin: 0; padding-left: 18px; }
+      .corr { background: #eef3fc; border-left: 4px solid #3f6ad8; border-radius: 0 8px 8px 0; padding: 12px 14px; margin: 13px 0; }
+
+      /* 우선순위 */
+      .prio { background: #fff; border: 1px solid #e3e6ec; border-radius: 10px; padding: 14px 16px; margin-top: 11px; }
+      .prio-head { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+      .rank { width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: #3f6ad8; color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+      .prio-head .srv { font-weight: 700; color: #3a3f52; }
+      .pg { display: grid; grid-template-columns: 84px 1fr; gap: 5px 12px; font-size: 12.5px; }
+      .pg .k { color: #9098aa; font-weight: 700; }
+      .pg .v { color: #3a4055; }
+
+      /* 원인 추적 */
+      .signals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 9px; margin-bottom: 16px; }
+      .sig { border: 1px solid #e3e6ec; border-radius: 8px; padding: 10px 12px; background: #fff; }
+      .sig .s-src { font-size: 11px; color: #9098aa; }
+      .sig .s-val { font-weight: 600; font-size: 12.5px; margin-top: 2px; color: #3a4055; }
+      .sig.hit { border-color: #d64545; background: #fbe9e9; }
+      .sig.hit .s-val { color: #d64545; }
+      .chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+      .chain .step { background: #fff; border: 1px solid #e3e6ec; border-left: 3px solid #3f6ad8; border-radius: 8px; padding: 10px 13px; flex: 1; min-width: 150px; }
+      .chain .step .st-t { font-weight: 600; font-size: 12.5px; color: #3a3f52; }
+      .chain .arr { align-self: center; color: #3f6ad8; font-weight: 800; font-size: 15px; }
+
+      /* 테이블 */
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      th { text-align: left; color: #9098aa; font-weight: 600; font-size: 11.5px; padding: 8px 12px; border-bottom: 1px solid #e3e6ec; white-space: nowrap; }
+      td { padding: 9px 12px; border-bottom: 1px solid #eef0f4; vertical-align: middle; }
+      tr:last-child td { border-bottom: none; }
+      td.name { font-weight: 600; color: #232838; }
+      .mono { font-variant-numeric: tabular-nums; font-family: "Consolas", monospace; font-size: 11.5px; }
+
+      /* 처리내역 */
+      .kv { display: grid; grid-template-columns: 100px 1fr; gap: 5px 12px; font-size: 12.5px; margin-bottom: 14px; }
+      .kv .k { color: #9098aa; }
+      .kv .v { color: #3a4055; font-weight: 500; }
+      .note-before { border: 1px dashed #d5d9e2; border-radius: 8px; padding: 12px 14px; color: #9098aa; font-size: 12.5px; font-style: italic; }
+      textarea { width: 100%; min-height: 150px; resize: vertical; line-height: 1.6; }
+
+      /* 자연어 질의 */
+      .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+      .chip { background: #f2f4f8; border: 1px solid #d5d9e2; color: #5a6072; border-radius: 16px; padding: 4px 11px; font-size: 11.5px; cursor: pointer; }
+      .chip:hover { border-color: #3f6ad8; color: #3f6ad8; }
+      .parsed { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .parsed .t { background: #eaf0fb; color: #2f52b0; border-radius: 7px; padding: 5px 10px; font-size: 11.5px; font-weight: 500; }
+      .qrow { display: flex; gap: 8px; }
+      .qrow input { flex: 1; }
+
+      /* 임계치 채팅 */
+      .pol-list { padding: 12px 16px; background: #f8f9fc; border: 1px solid #eef0f4; border-radius: 8px; margin-bottom: 12px; max-height: 130px; overflow-y: auto; }
+      .pol-item { font-size: 12px; padding: 4px 0; border-bottom: 1px dashed #eef0f4; }
+      .pol-item:last-child { border: none; }
+      .pol-item .ct { background: #eaf0fb; color: #3f6ad8; padding: 1px 7px; border-radius: 4px; font-weight: 600; margin-right: 6px; }
+      .pol-item .vals { color: #7a8194; }
+      .chat { min-height: 180px; max-height: 320px; overflow-y: auto; padding: 4px 2px 12px; }
+      .msg { margin-bottom: 12px; display: flex; }
+      .msg.user { justify-content: flex-end; }
+      .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+      .msg.user .bubble { background: #3f6ad8; color: #fff; border-bottom-right-radius: 3px; }
+      .msg.ai .bubble { background: #f0f2f6; color: #3a3f52; border-bottom-left-radius: 3px; }
+      .msg.ai.ok .bubble { background: #e7f4ec; color: #1f7a44; border: 1px solid #cfe6d5; }
+      .msg.ai.fail .bubble { background: #fbe9e9; color: #a03535; border: 1px solid #f0d5d5; }
+
+      .toast {
+        position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(16px);
+        background: #232838; color: #fff; padding: 11px 20px; border-radius: 10px; font-size: 13px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: all 0.28s; z-index: 50;
       }
-      .diag-status {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-        margin-bottom: 20px;
-      }
-      .diag-metric {
-        border: 1px solid #eef0f4;
-        border-radius: 8px;
-        padding: 12px 18px;
-        text-align: center;
-        min-width: 100px;
-      }
-      .diag-metric .m-name {
-        font-size: 11px;
-        color: #9098aa;
-      }
-      .diag-metric .m-val {
-        font-size: 22px;
-        font-weight: 800;
-        margin: 4px 0;
-      }
-      .diag-metric .m-status {
-        font-size: 11px;
-        font-weight: 700;
-        padding: 2px 8px;
-        border-radius: 10px;
-      }
-      .st-정상 {
-        background: #eaf3ec;
-        color: #2e9e52;
-      }
-      .st-주의 {
-        background: #fbefd6;
-        color: #b0791a;
-      }
-      .st-위험 {
-        background: #fbeeee;
-        color: #d64545;
-      }
-      .diag-card {
-        background: #f8f9fc;
-        border: 1px solid #eef0f4;
-        border-radius: 10px;
-        padding: 18px;
-      }
-      .diag-level {
-        display: inline-block;
-        font-weight: 800;
-        font-size: 13px;
-        padding: 4px 12px;
-        border-radius: 14px;
-        margin-bottom: 12px;
-      }
-      .diag-row {
-        margin-bottom: 12px;
-      }
-      .diag-row .r-label {
-        font-weight: 800;
-        font-size: 12px;
-        color: #3f6ad8;
-        margin-bottom: 4px;
-      }
-      .diag-row .r-text {
-        font-size: 13px;
-        color: #3a3f52;
-        line-height: 1.5;
-      }
-      .diag-row ul {
-        margin: 0;
-        padding-left: 18px;
-      }
-      .diag-row li {
-        font-size: 13px;
-        color: #3a3f52;
-        line-height: 1.6;
-      }
-      /* 상관관계 분석 강조 박스 */
-      .diag-correlation {
-        background: #eef3fc;
-        border-left: 4px solid #3f6ad8;
-        border-radius: 0 8px 8px 0;
-        padding: 14px 16px;
-        margin: 14px 0;
-      }
-      .corr-label {
-        font-weight: 800;
-        font-size: 13px;
-        color: #3f6ad8;
-        margin-bottom: 6px;
-      }
-      .corr-text {
-        font-size: 13px;
-        color: #2c3350;
-        line-height: 1.6;
-      }
-      /* 운영 브리핑: 집계 타일 + 우선순위 카드 */
-      .brief-tiles {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 18px;
-      }
-      .brief-tile {
-        border: 1px solid #eef0f4;
-        border-radius: 8px;
-        padding: 12px 18px;
-        min-width: 78px;
-        text-align: center;
-        background: #fff;
-      }
-      .brief-tile .bt-num {
-        font-size: 22px;
-        font-weight: 800;
-      }
-      .brief-tile .bt-lab {
-        font-size: 11px;
-        color: #9098aa;
-        margin-top: 2px;
-      }
-      .brief-prio {
-        border: 1px solid #eef0f4;
-        border-radius: 10px;
-        padding: 14px 16px;
-        margin-bottom: 12px;
-        background: #fff;
-      }
-      .brief-prio .bp-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-      }
-      .brief-prio .bp-rank {
-        width: 22px;
-        height: 22px;
-        flex-shrink: 0;
-        border-radius: 50%;
-        background: #3f6ad8;
-        color: #fff;
-        font-weight: 800;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .brief-prio .bp-server {
-        font-weight: 700;
-        color: #3a3f52;
+      .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+      @media (max-width: 720px) {
+        .sidebar { display: none; }
+        .tiles { grid-template-columns: repeat(2, 1fr); }
       }
     </style>
   </head>
@@ -438,382 +199,468 @@
       <div class="main">
         <div class="topbar">
           <div class="breadcrumb">홈 &gt; <b>AI 운영 도우미</b></div>
-          <div class="topbar-right"><b>aiwacs</b>님, 환영합니다.</div>
+          <div class="topbar-right">
+            <span class="clock" id="clock">--:--:--</span>
+            <span><b>aiwacs</b>님, 환영합니다.</span>
+          </div>
         </div>
         <div class="content">
-          <!-- 상단 탭 전환 -->
-          <div class="top-tabs">
-            <div
-              class="top-tab active"
-              data-tab="briefing"
-              onclick="switchTab('briefing')"
-            >
-              AI 운영 브리핑
-            </div>
-            <div
-              class="top-tab"
-              data-tab="diagnose"
-              onclick="switchTab('diagnose')"
-            >
-              AI 상태 진단
-            </div>
-            <div
-              class="top-tab"
-              data-tab="threshold"
-              onclick="switchTab('threshold')"
-            >
-              AI 임계치 설정
-            </div>
+          <div class="page-head">
+            <div class="eyebrow">AI 운영 도우미</div>
+            <h1>판정 이후를 AI가 돕습니다</h1>
+            <p>AiWACS가 수집·판정한 데이터를, 사람이 하던 해석·결정·조치·기록까지 AI가 이어서 돕습니다.</p>
           </div>
 
-          <!-- 운영 브리핑 패널 -->
-          <div class="ai-panel" id="panel-briefing">
-            <div class="ai-head">
-              <span class="title">AI 운영 브리핑</span>
-              <span class="badge">NEW</span>
-              <span class="sub"
-                >— 전체 서버 상태를 한 번에 요약하고, 지금 무엇부터 볼지 알려줍니다</span
-              >
-            </div>
-            <div class="diag-body">
-              <button class="diag-btn" id="brief-btn" onclick="runBriefing()">
-                운영 브리핑 생성
-              </button>
-              <div id="brief-result" class="diag-result"></div>
-            </div>
+          <div class="subtabs" id="subtabs">
+            <button class="subtab" data-tab="briefing" onclick="switchTab('briefing')">운영 브리핑<span class="tag">NEW</span></button>
+            <button class="subtab" data-tab="rootcause" onclick="switchTab('rootcause')">원인 추적<span class="tag">NEW</span></button>
+            <button class="subtab" data-tab="note" onclick="switchTab('note')">처리내역 초안<span class="tag">NEW</span></button>
+            <button class="subtab" data-tab="tuning" onclick="switchTab('tuning')">정책 튜닝<span class="tag">NEW</span></button>
+            <button class="subtab" data-tab="report" onclick="switchTab('report')">서술형 보고서<span class="tag">NEW</span></button>
+            <button class="subtab" data-tab="query" onclick="switchTab('query')">자연어 질의<span class="tag">NEW</span></button>
+            <button class="subtab" data-tab="diagnose" onclick="switchTab('diagnose')">상태 진단</button>
+            <button class="subtab" data-tab="threshold" onclick="switchTab('threshold')">임계치 설정</button>
           </div>
 
-          <!-- 진단 패널 -->
-          <div class="ai-panel" id="panel-diagnose" style="display: none">
-            <div class="ai-head">
-              <span class="title">AI 상태 진단</span>
-              <span class="badge">NEW</span>
-              <span class="sub"
-                >— 현재 서버 상태를 AI가 해석하고 살펴볼 방향을 안내합니다</span
-              >
-            </div>
-            <div class="diag-body">
-              <select id="diag-server" class="diag-server">
-                <option value="">서버 불러오는 중...</option>
-              </select>
-              <button class="diag-btn" id="diag-btn" onclick="runDiagnose()">
-                AI 진단 실행
-              </button>
-              <div id="diag-result" class="diag-result"></div>
-            </div>
-          </div>
+          <!-- 운영 브리핑 -->
+          <section class="view" id="view-briefing">
+            <div id="brief-tiles"></div>
+            <button class="btn" id="brief-btn" onclick="runBriefing()">운영 브리핑 생성</button>
+            <span class="demo" style="margin-left:10px">판정·집계는 코드가, 우선순위·원인·조치 해석은 AI가</span>
+            <div id="out-briefing" style="margin-top:14px"></div>
+          </section>
 
-          <!-- 임계치 변경 패널 -->
-          <div class="ai-panel" id="panel-threshold" style="display: none">
-            <div class="ai-head">
-              <span class="title">AI 임계치 설정</span>
-              <span class="badge">NEW</span>
-              <span class="sub"
-                >— 기업/정책을 말하면 임계치를 바꿔드립니다</span
-              >
-            </div>
-            <div class="current">
-              <div class="clabel">현재 등록된 정책</div>
-              <div id="pol-list">불러오는 중...</div>
-            </div>
-            <div class="chat" id="chat">
-              <div class="hint" id="hint">
-                아래처럼 말해보세요<br />
-                <span class="ex" onclick="useExample(this)"
-                  >테라넷 DB서버 정책 메모리 위험 95%로 올려줘</span
-                >
-                <span class="ex" onclick="useExample(this)"
-                  >ABC ERP서버 정책 CPU 주의 60%로 낮춰줘</span
-                >
+          <!-- 원인 추적 -->
+          <section class="view" id="view-rootcause">
+            <div class="card"><div class="card-body">
+              <div class="controls">
+                <span class="lbl">대상 서버</span>
+                <select class="server-select" id="rc-server"><option>불러오는 중…</option></select>
+                <button class="btn sm" onclick="runRootcause()">원인 추적 실행</button>
+              </div>
+              <div class="hint">지표·상위 프로세스·세부지표·최근 추세를 한 번에 모아 원인 사슬로 연결합니다.</div>
+            </div></div>
+            <div id="out-rootcause" style="margin-top:14px"></div>
+          </section>
+
+          <!-- 처리내역 초안 -->
+          <section class="view" id="view-note">
+            <div class="card">
+              <div class="card-head"><h2>알림 처리</h2><span class="sub">해제 시 처리 내용을 AI가 먼저 작성 → 담당자는 수정·승인만</span></div>
+              <div class="card-body">
+                <div class="controls">
+                  <span class="lbl">대상 서버</span>
+                  <select class="server-select" id="note-server"><option>불러오는 중…</option></select>
+                  <button class="btn sm" id="note-btn" onclick="draftNote()">AI 초안 생성</button>
+                </div>
+                <div id="note-slot" style="margin-top:12px">
+                  <div class="note-before">서버를 고르고 “AI 초안 생성”을 누르면, 현재 상태를 근거로 처리 내용 초안이 작성됩니다.</div>
+                </div>
               </div>
             </div>
-            <div class="input-row">
-              <input
-                type="text"
-                id="msg-input"
-                placeholder="예: 테라넷 DB서버 정책 메모리 위험 임계치 95%로 올려줘"
-              />
-              <button id="send-btn" onclick="send()">전송</button>
+            <div class="card">
+              <div class="card-head"><h2>저장된 처리내역</h2><span class="sub">지식 베이스 · 유사 장애 대응에 재활용</span></div>
+              <div class="card-body" id="note-history"><div class="demo">아직 저장된 처리내역이 없습니다.</div></div>
             </div>
-          </div>
+          </section>
+
+          <!-- 정책 튜닝 -->
+          <section class="view" id="view-tuning">
+            <button class="btn" id="tune-btn" onclick="runTuning()">정책 점검 실행</button>
+            <span class="demo" style="margin-left:10px">최근 7일 실측 vs 설정 임계치 비교 → 오탐/미탐 탐지</span>
+            <div id="out-tuning" style="margin-top:14px"></div>
+          </section>
+
+          <!-- 서술형 보고서 -->
+          <section class="view" id="view-report">
+            <div class="card"><div class="card-body">
+              <div class="controls">
+                <span class="lbl">기간</span>
+                <select id="rp-hours">
+                  <option value="8">최근 8시간 (교대 인수인계)</option>
+                  <option value="24">최근 24시간</option>
+                </select>
+                <button class="btn sm" onclick="runReport()">보고서 생성</button>
+              </div>
+            </div></div>
+            <div id="out-report" style="margin-top:14px"></div>
+          </section>
+
+          <!-- 자연어 질의 -->
+          <section class="view" id="view-query">
+            <div class="card"><div class="card-body">
+              <div class="qrow">
+                <input type="text" id="q-input" placeholder="예: 메모리 80% 넘은 장비 알려줘 / 지금 위험인 서버" />
+                <button class="btn" onclick="runQuery()">질의</button>
+              </div>
+              <div class="chips">
+                <button class="chip" onclick="setQuery(this)">지금 위험이나 주의인 장비</button>
+                <button class="chip" onclick="setQuery(this)">메모리 80% 넘은 장비</button>
+                <button class="chip" onclick="setQuery(this)">테라넷 고객사 장비 상태</button>
+              </div>
+            </div></div>
+            <div id="out-query" style="margin-top:14px"></div>
+          </section>
+
+          <!-- 상태 진단 -->
+          <section class="view" id="view-diagnose">
+            <div class="card"><div class="card-body">
+              <div class="controls">
+                <span class="lbl">대상 서버</span>
+                <select class="server-select" id="diag-server"><option>불러오는 중…</option></select>
+                <button class="btn sm" id="diag-btn" onclick="runDiagnose()">AI 진단 실행</button>
+              </div>
+              <div class="hint">현재 서버 상태를 AI가 해석하고 살펴볼 방향을 안내합니다.</div>
+            </div></div>
+            <div id="out-diagnose" style="margin-top:14px"></div>
+          </section>
+
+          <!-- 임계치 설정 -->
+          <section class="view" id="view-threshold">
+            <div class="card">
+              <div class="card-head"><h2>AI 임계치 설정</h2><span class="sub">기업/정책을 말하면 임계치를 바꿔드립니다</span></div>
+              <div class="card-body">
+                <div class="demo" style="margin-bottom:6px">현재 등록된 정책</div>
+                <div class="pol-list" id="pol-list">불러오는 중…</div>
+                <div class="chat" id="chat">
+                  <div class="hint" id="th-hint">
+                    아래처럼 말해보세요<br />
+                    <span class="chip" onclick="useExample(this)">테라넷 DB서버 정책 메모리 위험 95%로 올려줘</span>
+                    <span class="chip" onclick="useExample(this)">ABC ERP서버 정책 CPU 주의 60%로 낮춰줘</span>
+                  </div>
+                </div>
+                <div class="qrow" style="margin-top:8px">
+                  <input type="text" id="th-input" placeholder="예: 테라넷 DB서버 정책 메모리 위험 임계치 95%로 올려줘" />
+                  <button class="btn" id="th-send" onclick="sendThreshold()">전송</button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
-    <script>
-      const TABS = ["briefing", "diagnose", "threshold"];
+    <div class="toast" id="toast"></div>
 
-      // 탭 전환
+    <script>
+      const TABS = ["briefing","rootcause","note","tuning","report","query","diagnose","threshold"];
+      const esc = (s) => String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const lvClass = (l) => "lv lv-" + (l || "정상");
+
       function switchTab(tab) {
-        document
-          .querySelectorAll(".top-tab")
-          .forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
-        TABS.forEach((name) => {
-          const panel = document.getElementById("panel-" + name);
-          if (panel) panel.style.display = name === tab ? "block" : "none";
+        document.querySelectorAll(".subtab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
+        TABS.forEach((n) => {
+          const el = document.getElementById("view-" + n);
+          if (el) el.classList.toggle("active", n === tab);
         });
-        // 주소 끝(#briefing / #diagnose / #threshold)을 맞춰서 사이드바 선택 표시와 새로고침 후에도 같은 탭 유지
         if (location.hash.slice(1) !== tab) {
           history.replaceState(null, "", "#" + tab);
           if (window.refreshSidebar) refreshSidebar();
         }
       }
-
-      // 사이드바에서 운영 브리핑 / 상태 진단 / 임계치 변경을 누르면 해당 탭으로 (기본: 운영 브리핑)
       function openTabFromHash() {
         const t = location.hash.slice(1);
         switchTab(TABS.includes(t) ? t : "briefing");
       }
       window.addEventListener("hashchange", openTabFromHash);
-      openTabFromHash();
 
-      // AI 운영 브리핑 실행 (전 서버를 한 번에 요약)
-      async function runBriefing() {
-        const btn = document.getElementById("brief-btn");
-        const result = document.getElementById("brief-result");
-        btn.disabled = true;
-        result.innerHTML =
-          '<div style="color:#9098aa;padding:20px;">AI가 전체 서버를 살펴보는 중입니다...</div>';
-        try {
-          const res = await fetch("/api/ai/briefing", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: "{}",
-          });
-          const data = await res.json();
-          if (!data.ok) {
-            result.innerHTML = `<div style="color:#d64545;padding:20px;">${data.reply}</div>`;
-            btn.disabled = false;
-            return;
-          }
-
-          const o = data.overall;
-          const b = data.briefing;
-          const levelColor =
-            o.level === "위험"
-              ? "st-위험"
-              : o.level === "주의"
-                ? "st-주의"
-                : "st-정상";
-
-          // 집계 타일 (판정·집계는 코드가 내린 값)
-          const tiles = `<div class="brief-tiles">
-        <div class="brief-tile"><div class="bt-num">${o.total}</div><div class="bt-lab">전체</div></div>
-        <div class="brief-tile"><div class="bt-num" style="color:#d64545">${o.danger}</div><div class="bt-lab">위험</div></div>
-        <div class="brief-tile"><div class="bt-num" style="color:#b0791a">${o.caution}</div><div class="bt-lab">주의</div></div>
-        <div class="brief-tile"><div class="bt-num" style="color:#2e9e52">${o.normal}</div><div class="bt-lab">정상</div></div>
-        <div class="brief-tile"><div class="bt-num" style="color:#9098aa">${o.offline}</div><div class="bt-lab">오프라인</div></div>
-      </div>`;
-
-          // 우선순위 조치 (AI가 급한 순서로 정리)
-          const prios = Array.isArray(b.priorities) ? b.priorities : [];
-          const plist = prios.length
-            ? prios
-                .map(
-                  (p, i) => `<div class="brief-prio">
-          <div class="bp-head">
-            <span class="bp-rank">${i + 1}</span>
-            <span class="diag-level ${p.level === "위험" ? "st-위험" : "st-주의"}" style="margin:0">${p.level}</span>
-            <span class="bp-server">${p.server || ""}</span>
-          </div>
-          <div class="diag-row"><div class="r-label">문제</div><div class="r-text">${p.issue || ""}</div></div>
-          <div class="diag-row"><div class="r-label">가능성 있는 원인</div><div class="r-text">${p.cause || ""}</div></div>
-          <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${p.action || ""}</div></div>
-        </div>`,
-                )
-                .join("")
-            : '<div class="r-text" style="color:#2e9e52;padding:8px 0;">현재 주의·위험 상태인 서버가 없습니다. 👍</div>';
-
-          const watch = b.watch
-            ? `<div class="diag-correlation"><div class="corr-label">👀 지켜볼 것</div><div class="corr-text">${b.watch}</div></div>`
-            : "";
-
-          result.innerHTML =
-            tiles +
-            `<div class="diag-card">
-        <span class="diag-level ${levelColor}">전체 상태: ${o.level}</span>
-        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${b.summary || ""}</div></div>
-        ${watch}
-        <div class="diag-row"><div class="r-label">우선순위 조치</div></div>
-        ${plist}
-      </div>`;
-        } catch (e) {
-          result.innerHTML =
-            '<div style="color:#d64545;padding:20px;">브리핑 생성 중 오류가 발생했습니다.</div>';
-        }
-        btn.disabled = false;
+      // ---------- 공통 ----------
+      let toastTimer;
+      function toast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg; t.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
       }
-
-      // AI 진단 실행
-      async function runDiagnose() {
-        const btn = document.getElementById("diag-btn");
-        const result = document.getElementById("diag-result");
-        btn.disabled = true;
-        result.innerHTML =
-          '<div style="color:#9098aa;padding:20px;">AI가 진단 중입니다...</div>';
-        try {
-          const serverId = document.getElementById("diag-server").value;
-          const res = await fetch("/api/ai/diagnose", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ serverId: serverId || null }),
-          });
-          const data = await res.json();
-          if (!data.ok) {
-            result.innerHTML = `<div style="color:#d64545;padding:20px;">${data.reply}</div>`;
-            btn.disabled = false;
-            return;
-          }
-
-          const names = { cpu: "CPU", memory: "메모리", disk: "디스크" };
-          // 현재 상태 카드
-          let statusHtml = '<div class="diag-status">';
-          for (const k of ["cpu", "memory", "disk"]) {
-            const s = data.status[k];
-            statusHtml += `<div class="diag-metric">
-          <div class="m-name">${names[k]}</div>
-          <div class="m-val">${s.value}%</div>
-          <div class="m-status st-${s.status}">${s.status}</div>
+      function tiles(o) {
+        return `<div class="tiles">
+          <div class="tile"><div class="num">${o.total}</div><div class="lab">전체</div></div>
+          <div class="tile crit"><div class="num" style="color:#d64545">${o.danger}</div><div class="lab">위험</div></div>
+          <div class="tile warn"><div class="num" style="color:#c9820a">${o.caution}</div><div class="lab">주의</div></div>
+          <div class="tile ok"><div class="num" style="color:#1f9d57">${o.normal}</div><div class="lab">정상</div></div>
+          <div class="tile down"><div class="num" style="color:#6b7280">${o.offline}</div><div class="lab">오프라인</div></div>
         </div>`;
-          }
-          statusHtml += "</div>";
-
-          // AI 진단 카드
-          const d = data.diagnosis;
-          const levelColor =
-            d.level === "위험"
-              ? "st-위험"
-              : d.level === "주의"
-                ? "st-주의"
-                : "st-정상";
-          const causes = Array.isArray(d.causes)
-            ? d.causes.map((c) => `<li>${c}</li>`).join("")
-            : "";
-          const correlationHtml = d.correlation
-            ? `<div class="diag-correlation"><div class="corr-label">🔗 상관관계 분석</div><div class="corr-text">${d.correlation}</div></div>`
-            : "";
-          const diagHtml = `<div class="diag-card">
-        <span class="diag-level ${levelColor}">AI 진단: ${d.level}</span>
-        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${d.summary}</div></div>
-        ${correlationHtml}
-        <div class="diag-row"><div class="r-label">가능성 있는 원인</div><ul>${causes}</ul></div>
-        <div class="diag-row"><div class="r-label">확인 방법</div><div class="r-text">${d.check}</div></div>
-        <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${d.action}</div></div>
-      </div>`;
-
-          result.innerHTML = statusHtml + diagHtml;
-        } catch (e) {
-          result.innerHTML =
-            '<div style="color:#d64545;padding:20px;">진단 중 오류가 발생했습니다.</div>';
-        }
-        btn.disabled = false;
       }
-
-      // 진단할 서버 목록 (온라인 서버만 선택 가능)
-      async function loadServerOptions() {
-        const sel = document.getElementById("diag-server");
-        const prev = sel.value;
+      async function loadServers() {
         try {
           const list = await (await fetch("/api/servers")).json();
-          if (!list.length) {
-            sel.innerHTML = '<option value="">연결된 서버 없음</option>';
-            return;
-          }
-          sel.innerHTML = list
-            .map(
-              (s) =>
-                `<option value="${s.id}" ${s.online ? "" : "disabled"}>${s.company ? "[" + s.company + "] " : ""}${s.name}${s.online ? "" : " (오프라인)"}</option>`,
-            )
-            .join("");
-          // 이전에 고른 서버가 여전히 온라인이면 유지, 아니면 첫 온라인 서버
-          const keep = list.find((s) => String(s.id) === prev && s.online);
-          const first = list.find((s) => s.online);
-          sel.value = keep ? keep.id : first ? first.id : "";
-        } catch (e) {
-          console.log(e);
-        }
+          const opts = !list.length
+            ? '<option value="">연결된 서버 없음</option>'
+            : list.map((s) => `<option value="${s.id}" ${s.online ? "" : "disabled"}>${s.company ? "[" + esc(s.company) + "] " : ""}${esc(s.name)}${s.online ? "" : " (오프라인)"}</option>`).join("");
+          document.querySelectorAll(".server-select").forEach((sel) => {
+            const prev = sel.value;
+            sel.innerHTML = opts;
+            const keep = list.find((s) => String(s.id) === prev && s.online);
+            const first = list.find((s) => s.online);
+            sel.value = keep ? keep.id : first ? first.id : "";
+          });
+        } catch (e) { console.log(e); }
       }
 
+      // ---------- 운영 브리핑 ----------
+      async function runBriefing() {
+        const btn = document.getElementById("brief-btn"), out = document.getElementById("out-briefing");
+        btn.disabled = true; out.innerHTML = '<div class="loading">AI가 전체 서버를 살펴보는 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/briefing", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+          if (!d.ok) { out.innerHTML = fail(d.reply); btn.disabled = false; return; }
+          document.getElementById("brief-tiles").innerHTML = tiles(d.overall);
+          const b = d.briefing, o = d.overall;
+          const prios = Array.isArray(b.priorities) ? b.priorities : [];
+          const plist = prios.length ? prios.map((p, i) => `
+            <div class="prio">
+              <div class="prio-head"><span class="rank">${i + 1}</span><span class="${lvClass(p.level)}">${esc(p.level)}</span><span class="srv">${esc(p.server)}</span></div>
+              <div class="pg">
+                <span class="k">문제</span><span class="v">${esc(p.issue)}</span>
+                <span class="k">가능성</span><span class="v">${esc(p.cause)}</span>
+                <span class="k">권장 조치</span><span class="v">${esc(p.action)}</span>
+              </div>
+            </div>`).join("") : '<div class="r-text" style="color:#1f9d57">현재 주의·위험 상태인 서버가 없습니다. 👍</div>';
+          out.innerHTML = `<div class="ai-card">
+            <span class="ai-level ${lvClass(o.level)}">전체 상태: ${esc(o.level)}</span>
+            <div class="rb"><div class="r-label">요약</div><div class="r-text">${esc(b.summary)}</div></div>
+            ${b.watch ? `<div class="corr"><div class="r-label">👀 지켜볼 것</div><div class="r-text">${esc(b.watch)}</div></div>` : ""}
+            <div class="r-label" style="margin-top:14px">우선순위 조치</div>${plist}
+          </div>`;
+        } catch (e) { out.innerHTML = fail("브리핑 생성 중 오류가 발생했습니다."); }
+        btn.disabled = false;
+      }
+
+      // ---------- 원인 추적 ----------
+      async function runRootcause() {
+        const out = document.getElementById("out-rootcause");
+        const id = document.getElementById("rc-server").value;
+        out.innerHTML = '<div class="loading">신호를 모아 원인을 추적하는 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/rootcause", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serverId: id || null }) })).json();
+          if (!d.ok) { out.innerHTML = fail(d.reply); return; }
+          const r = d.result;
+          const sigs = Array.isArray(r.signals) ? r.signals : [];
+          const chain = Array.isArray(r.chain) ? r.chain : [];
+          out.innerHTML = `<div class="ai-card">
+            <div class="r-label" style="margin-bottom:8px">수집한 신호 (자동)</div>
+            <div class="signals">${sigs.map((s) => `<div class="sig ${s.hit ? "hit" : ""}"><div class="s-src">${esc(s.source)}</div><div class="s-val">${esc(s.detail)}</div></div>`).join("")}</div>
+            <div class="r-label" style="margin-bottom:8px">원인 사슬 (추정)</div>
+            <div class="chain">${chain.map((s, i) => `${i ? '<span class="arr">→</span>' : ""}<div class="step"><div class="st-t">${esc(s)}</div></div>`).join("")}</div>
+            <div class="rb" style="margin-top:16px"><div class="r-label">해석</div><div class="r-text">${esc(r.interpretation)}</div></div>
+            <div class="rb"><div class="r-label">확인 방법 / 조치</div><div class="r-text">${esc(r.action)}</div></div>
+          </div>`;
+        } catch (e) { out.innerHTML = fail("원인 추적 중 오류가 발생했습니다."); }
+      }
+
+      // ---------- 처리내역 초안 ----------
+      async function draftNote() {
+        const slot = document.getElementById("note-slot"), btn = document.getElementById("note-btn");
+        const id = document.getElementById("note-server").value;
+        btn.disabled = true; slot.innerHTML = '<div class="loading">AI가 처리 내용을 작성 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/note/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serverId: id || null }) })).json();
+          if (!d.ok) { slot.innerHTML = fail(d.reply); btn.disabled = false; return; }
+          slot.innerHTML = `
+            <div class="demo" style="margin-bottom:6px">${esc(d.server)} · AI 초안 (검토 후 수정하세요)</div>
+            <textarea id="note-text">${esc(d.draft)}</textarea>
+            <div class="controls" style="margin-top:10px">
+              <button class="btn" onclick="saveNote(${id})">승인 · 저장</button>
+              <button class="btn ghost" onclick="draftNote()">다시 생성</button>
+              <span class="demo">AI 초안 → 담당자 수정·승인 → 지식 축적</span>
+            </div>`;
+        } catch (e) { slot.innerHTML = fail("초안 생성 중 오류가 발생했습니다."); }
+        btn.disabled = false;
+      }
+      async function saveNote(id) {
+        const content = document.getElementById("note-text").value;
+        try {
+          const d = await (await fetch("/api/ai/note/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serverId: id || null, content }) })).json();
+          toast(d.reply || "저장했습니다.");
+          if (d.ok) loadNoteHistory();
+        } catch (e) { toast("저장 중 오류가 발생했습니다."); }
+      }
+      async function loadNoteHistory() {
+        const box = document.getElementById("note-history");
+        try {
+          const list = await (await fetch("/api/ai/note/history")).json();
+          if (!list.length) { box.innerHTML = '<div class="demo">아직 저장된 처리내역이 없습니다.</div>'; return; }
+          box.innerHTML = list.map((n) => `<div class="prio" style="margin-top:0;margin-bottom:10px">
+            <div class="prio-head"><span class="srv">${esc(n.server)}</span><span class="demo">${esc(n.createdAt)}</span></div>
+            <div class="r-text">${esc(n.content)}</div></div>`).join("");
+        } catch (e) { console.log(e); }
+      }
+
+      // ---------- 정책 튜닝 ----------
+      const METRIC_KR = { cpu: "CPU", memory: "메모리", disk: "디스크" };
+      async function runTuning() {
+        const btn = document.getElementById("tune-btn"), out = document.getElementById("out-tuning");
+        btn.disabled = true; out.innerHTML = '<div class="loading">실측과 임계치를 비교하는 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/tuning", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+          if (!d.ok) { out.innerHTML = fail(d.reply); btn.disabled = false; return; }
+          const r = d.result, items = Array.isArray(r.items) ? r.items : [];
+          let rows = items.map((it) => {
+            const vc = it.verdict && it.verdict.includes("적정") ? "lv-정상" : "lv-주의";
+            const apply = [];
+            if (it.suggestWarn != null) apply.push(btnApply(it, "warn", it.suggestWarn));
+            if (it.suggestDanger != null) apply.push(btnApply(it, "danger", it.suggestDanger));
+            return `<tr>
+              <td class="name">[${esc(it.company)}] ${esc(it.policy)}<div class="demo">${esc(METRIC_KR[it.metric] || it.metric)}</div></td>
+              <td><span class="lv ${vc}">${esc(it.verdict)}</span></td>
+              <td>${esc(it.reason)}</td>
+              <td>${apply.join(" ") || '<span class="demo">유지 권장</span>'}</td>
+            </tr>`;
+          }).join("");
+          out.innerHTML = `${r.summary ? `<div class="ai-card" style="margin-bottom:14px"><div class="r-label">요약</div><div class="r-text">${esc(r.summary)}</div></div>` : ""}
+            ${items.length ? `<div class="card"><div class="table-wrap"><table><thead><tr><th>정책 · 항목</th><th>진단</th><th>근거</th><th>적용</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+            <div class="hint">적용은 담당자 확인 후 실행 — 실제 저장은 기존 정책 검증 로직이 처리합니다.</div>` : '<div class="r-text">조정이 필요한 정책이 없습니다.</div>'}`;
+        } catch (e) { out.innerHTML = fail("정책 점검 중 오류가 발생했습니다."); }
+        btn.disabled = false;
+      }
+      function btnApply(it, level, value) {
+        const lk = level === "warn" ? "주의" : "위험";
+        const payload = JSON.stringify({ company: it.company, policy: it.policy, metric: it.metric, level, value }).replace(/"/g, "&quot;");
+        return `<button class="btn sm" onclick='applyTune(this, ${payload})'>${lk} ${value}%로</button>`;
+      }
+      async function applyTune(btn, payload) {
+        btn.disabled = true;
+        try {
+          const d = await (await fetch("/api/ai/tuning/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })).json();
+          toast(d.reply || (d.ok ? "적용됨" : "적용 실패"));
+          if (d.ok) btn.outerHTML = '<span class="lv lv-정상">적용됨</span>';
+          else btn.disabled = false;
+        } catch (e) { toast("적용 중 오류가 발생했습니다."); btn.disabled = false; }
+      }
+
+      // ---------- 서술형 보고서 ----------
+      async function runReport() {
+        const out = document.getElementById("out-report");
+        const hours = document.getElementById("rp-hours").value;
+        out.innerHTML = '<div class="loading">최근 상황을 정리해 보고서를 작성하는 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hours }) })).json();
+          if (!d.ok) { out.innerHTML = fail(d.reply); return; }
+          const r = d.result, o = d.overall;
+          out.innerHTML = `${tiles(o)}<div class="ai-card">
+            <span class="ai-level lv-정상" style="background:#eaf0fb;color:#2f52b0">📋 최근 ${esc(d.period)} 인수인계</span>
+            <div class="rb"><div class="r-label">한눈에</div><div class="r-text">${esc(r.summary)}</div></div>
+            <div class="rb"><div class="r-label">자원 추세</div><div class="r-text">${esc(r.trends)}</div></div>
+            <div class="rb"><div class="r-label">지켜볼 서버</div><div class="r-text">${esc(r.open)}</div></div>
+            <div class="rb"><div class="r-label">다음 근무자 인계</div><div class="r-text">${esc(r.handover)}</div></div>
+          </div>`;
+        } catch (e) { out.innerHTML = fail("보고서 생성 중 오류가 발생했습니다."); }
+      }
+
+      // ---------- 자연어 질의 ----------
+      function setQuery(el) { document.getElementById("q-input").value = el.textContent; runQuery(); }
+      async function runQuery() {
+        const q = document.getElementById("q-input").value.trim(), out = document.getElementById("out-query");
+        if (!q) { out.innerHTML = ""; return; }
+        out.innerHTML = '<div class="loading">AI가 조회 조건으로 변환 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: q }) })).json();
+          if (!d.ok) { out.innerHTML = fail(d.reply); return; }
+          const r = d.result;
+          const cols = Array.isArray(r.columns) ? r.columns : [];
+          const rows = Array.isArray(r.rows) ? r.rows : [];
+          const parsed = Array.isArray(r.parsed) ? r.parsed : [];
+          const table = rows.length ? `<div class="card"><div class="table-wrap"><table>
+            <thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+            <tbody>${rows.map((row) => `<tr>${row.map((c, i) => `<td${i === 0 ? ' class="name"' : ""}>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+          </table></div></div>` : "";
+          out.innerHTML = `${parsed.length ? `<div class="parsed">${parsed.map((p) => `<span class="t">${esc(p)}</span>`).join("")}</div>` : ""}
+            ${table}${r.note ? `<div class="hint">${esc(r.note)}</div>` : ""}`;
+        } catch (e) { out.innerHTML = fail("질의 처리 중 오류가 발생했습니다."); }
+      }
+
+      // ---------- 상태 진단 (기존) ----------
+      async function runDiagnose() {
+        const btn = document.getElementById("diag-btn"), out = document.getElementById("out-diagnose");
+        const id = document.getElementById("diag-server").value;
+        btn.disabled = true; out.innerHTML = '<div class="loading">AI가 진단 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/diagnose", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serverId: id || null }) })).json();
+          if (!d.ok) { out.innerHTML = fail(d.reply); btn.disabled = false; return; }
+          const names = { cpu: "CPU", memory: "메모리", disk: "디스크" };
+          let st = '<div class="signals" style="margin-bottom:14px">';
+          for (const k of ["cpu", "memory", "disk"]) {
+            const s = d.status[k];
+            st += `<div class="sig"><div class="s-src">${names[k]}</div><div class="s-val">${s.value}% · <span class="${lvClass(s.status)}">${s.status}</span></div></div>`;
+          }
+          st += "</div>";
+          const g = d.diagnosis;
+          const causes = Array.isArray(g.causes) ? `<ul>${g.causes.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>` : "";
+          out.innerHTML = st + `<div class="ai-card">
+            <span class="ai-level ${lvClass(g.level)}">AI 진단: ${esc(g.level)}</span>
+            <div class="rb"><div class="r-label">요약</div><div class="r-text">${esc(g.summary)}</div></div>
+            ${g.correlation ? `<div class="corr"><div class="r-label">🔗 상관관계 분석</div><div class="r-text">${esc(g.correlation)}</div></div>` : ""}
+            <div class="rb"><div class="r-label">가능성 있는 원인</div>${causes}</div>
+            <div class="rb"><div class="r-label">확인 방법</div><div class="r-text">${esc(g.check)}</div></div>
+            <div class="rb"><div class="r-label">권장 조치</div><div class="r-text">${esc(g.action)}</div></div>
+          </div>`;
+        } catch (e) { out.innerHTML = fail("진단 중 오류가 발생했습니다."); }
+        btn.disabled = false;
+      }
+
+      // ---------- 임계치 설정 (기존) ----------
       async function loadPolicies() {
-        const res = await fetch("/api/policies");
-        const data = await res.json();
-        document.getElementById("pol-list").innerHTML = data.policies
-          .map(
-            (p) => `
-      <div class="pol-item">
-        <span class="company-tag">${p.company}</span>${p.name}
-        <span class="vals"> · CPU ${p.cpu.warn}/${p.cpu.danger} · 메모리 ${p.memory.warn}/${p.memory.danger} · 디스크 ${p.disk.warn}/${p.disk.danger}</span>
-      </div>`,
-          )
-          .join("");
+        try {
+          const data = await (await fetch("/api/policies")).json();
+          document.getElementById("pol-list").innerHTML = data.policies.map((p) => `
+            <div class="pol-item"><span class="ct">${esc(p.company)}</span>${esc(p.name)}
+            <span class="vals"> · CPU ${p.cpu.warn}/${p.cpu.danger} · 메모리 ${p.memory.warn}/${p.memory.danger} · 디스크 ${p.disk.warn}/${p.disk.danger}</span></div>`).join("");
+        } catch (e) { console.log(e); }
       }
-      function useExample(el) {
-        document.getElementById("msg-input").value = el.textContent;
-        send();
-      }
+      function useExample(el) { document.getElementById("th-input").value = el.textContent; sendThreshold(); }
       function addMsg(text, cls) {
-        const hint = document.getElementById("hint");
-        if (hint) hint.remove();
+        const hint = document.getElementById("th-hint"); if (hint) hint.remove();
         const chat = document.getElementById("chat");
         const div = document.createElement("div");
         div.className = "msg " + cls;
-        // 줄바꿈(\n)을 <br>로 변환해서 표시
-        const safe = text
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/\n/g, "<br>");
-        div.innerHTML = `<div class="bubble">${safe}</div>`;
-        chat.appendChild(div);
-        chat.scrollTop = chat.scrollHeight;
+        div.innerHTML = `<div class="bubble">${esc(text)}</div>`;
+        chat.appendChild(div); chat.scrollTop = chat.scrollHeight;
       }
-      async function send() {
-        const input = document.getElementById("msg-input");
-        const msg = input.value.trim();
+      async function sendThreshold() {
+        const input = document.getElementById("th-input"), msg = input.value.trim();
         if (!msg) return;
-        addMsg(msg, "user");
-        input.value = "";
-        const btn = document.getElementById("send-btn");
-        btn.disabled = true;
-        addMsg("처리 중...", "ai");
+        addMsg(msg, "user"); input.value = "";
+        const btn = document.getElementById("th-send"); btn.disabled = true;
+        addMsg("처리 중…", "ai");
         try {
-          const res = await fetch("/api/ai/threshold", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: msg }),
-          });
-          const data = await res.json();
-          const chat = document.getElementById("chat");
-          chat.removeChild(chat.lastChild);
-          addMsg(data.reply, "ai " + (data.ok ? "ok" : "fail"));
-          if (data.ok) loadPolicies();
+          const d = await (await fetch("/api/ai/threshold", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: msg }) })).json();
+          const chat = document.getElementById("chat"); chat.removeChild(chat.lastChild);
+          addMsg(d.reply, "ai " + (d.ok ? "ok" : "fail"));
+          if (d.ok) loadPolicies();
         } catch (e) {
-          const chat = document.getElementById("chat");
-          chat.removeChild(chat.lastChild);
-          addMsg("오류가 발생했습니다. 다시 시도해주세요.", "ai fail");
+          const chat = document.getElementById("chat"); chat.removeChild(chat.lastChild);
+          addMsg("오류가 발생했습니다. 다시 시도해 주세요.", "ai fail");
         }
-        btn.disabled = false;
-        input.focus();
+        btn.disabled = false; input.focus();
       }
-      // 한글 IME 조합 상태 추적 (조합 중 엔터 방지)
-      const inputEl = document.getElementById("msg-input");
-      let isComposing = false;
-      inputEl.addEventListener("compositionstart", () => {
-        isComposing = true;
-      });
-      inputEl.addEventListener("compositionend", () => {
-        isComposing = false;
-      });
-      inputEl.addEventListener("keydown", (e) => {
-        // 한글 조합 중이면 엔터 무시 (조합 완료 후에만 전송)
-        if (e.key === "Enter" && !isComposing && !e.isComposing) {
-          e.preventDefault();
-          send();
-        }
+
+      function fail(msg) { return `<div class="ai-card" style="color:#a03535">${esc(msg)}</div>`; }
+
+      // 시계
+      function tick() {
+        const d = new Date(), p = (n) => String(n).padStart(2, "0");
+        document.getElementById("clock").textContent = "서버 시각 " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+      }
+      setInterval(tick, 1000); tick();
+
+      // 한글 IME 엔터 처리
+      ["q-input", "th-input"].forEach((idv) => {
+        const el = document.getElementById(idv);
+        let composing = false;
+        el.addEventListener("compositionstart", () => (composing = true));
+        el.addEventListener("compositionend", () => (composing = false));
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !composing && !e.isComposing) {
+            e.preventDefault();
+            idv === "q-input" ? runQuery() : sendThreshold();
+          }
+        });
       });
 
+      openTabFromHash();
+      loadServers();
       loadPolicies();
-      loadServerOptions();
-      setInterval(loadServerOptions, 5000);
+      loadNoteHistory();
+      setInterval(loadServers, 5000);
     </script>
   </body>
 </html>

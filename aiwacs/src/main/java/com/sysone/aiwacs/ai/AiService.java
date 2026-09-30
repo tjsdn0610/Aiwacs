@@ -9,8 +9,10 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 
 import com.sysone.aiwacs.history.MetricHistoryService;
+import com.sysone.aiwacs.policy.Policy;
 import com.sysone.aiwacs.policy.PolicyService;
 import com.sysone.aiwacs.policy.PolicyService.ChangeResult;
+import com.sysone.aiwacs.policy.Threshold;
 import com.sysone.aiwacs.server.AgentReport;
 import com.sysone.aiwacs.server.MonitoredServer;
 import com.sysone.aiwacs.server.ServerService;
@@ -33,13 +35,15 @@ public class AiService {
     private final PolicyService policyService;
     private final ServerService servers;
     private final MetricHistoryService history;
+    private final HandlingNoteStore notes;
 
     public AiService(GeminiClient gemini, PolicyService policyService, ServerService servers,
-                     MetricHistoryService history) {
+                     MetricHistoryService history, HandlingNoteStore notes) {
         this.gemini = gemini;
         this.policyService = policyService;
         this.servers = servers;
         this.history = history;
+        this.notes = notes;
     }
 
     // ===== AI 임계치 변경 (기업+정책 지정, 여러 개 동시 가능) =====
@@ -361,6 +365,339 @@ public class AiService {
         }
 
         return Map.of("ok", true, "overall", overall, "briefing", result);
+    }
+
+    // ===== AI 원인 추적 (한 서버의 여러 신호를 자동으로 모아 원인 사슬로 연결) =====
+    public Map<String, Object> rootcause(Long serverId) {
+        if (!gemini.isConfigured()) {
+            return Map.of("ok", false, "reply", NOT_CONFIGURED);
+        }
+        MonitoredServer server = serverId == null ? null : servers.findById(serverId).orElse(null);
+        if (server == null) {
+            return Map.of("ok", false, "reply", "분석할 서버를 선택해 주세요.");
+        }
+        if (!servers.isOnline(serverId)) {
+            return Map.of("ok", false, "reply",
+                    "'" + server.label() + "' 서버가 오프라인 상태라 원인을 추적할 수 없습니다.");
+        }
+        AgentReport report = servers.latest(serverId).orElseThrow().report();
+        Map<String, Map<String, Object>> status = servers.judge(serverId).orElseThrow();
+
+        Map<String, Object> detail = new LinkedHashMap<>();
+        if (report.detail() != null) detail.putAll(report.detail());
+        if (report.io() != null) detail.putAll(report.io());
+        List<Map<String, Object>> topCpu = report.procs().stream()
+                .sorted(Comparator.comparingDouble(AgentReport.Proc::cpu).reversed()).limit(3)
+                .map(p -> ordered("name", p.name(), "cpu", p.cpu())).toList();
+        List<Map<String, Object>> topMem = report.procs().stream()
+                .sorted(Comparator.comparingDouble(AgentReport.Proc::mem).reversed()).limit(3)
+                .map(p -> ordered("name", p.name(), "mem", p.mem())).toList();
+        List<Map<String, Object>> recent = history.recent(serverId);
+
+        String prompt = """
+                당신은 20년 경력의 시스템 성능 분석 전문가입니다. 한 서버의 여러 신호를 종합해 원인을 추적하세요.
+                이 환경에서 볼 수 있는 신호는 지표·상위 프로세스·세부지표·최근 80초 추세뿐입니다.
+                (로그·세션·네트워크 경로는 이 데모 환경에서는 수집 대상이 아니므로 언급하지 마세요.)
+
+                [규칙]
+                - 판정(정상/주의/위험)은 코드가 이미 내렸습니다. 바꾸지 말고 해석만 하세요.
+                - 신호들 사이의 인과관계를 화살표로 이어 원인 사슬(chain)을 만드세요.
+                - 근거가 된 수치를 함께 쓰고, 원인은 단정하지 말고 "가능성" 형태로 쓰세요.
+                - 쉬운 말로 쓰되 전문용어는 괄호로 풀어주세요. 반드시 JSON만 답하세요.
+
+                [출력 형식]
+                {"signals": [{"source": "지표|프로세스|메모리|디스크|추세", "detail": "값 요약", "hit": true 또는 false}], "chain": ["단계1", "단계2", "단계3"], "interpretation": "원인 해석 1~2문장", "action": "확인 방법과 조치를 단계로"}
+
+                [현재 상태 및 판정]
+                %s
+                [세부 지표]
+                %s
+                [CPU 상위 프로세스]
+                %s
+                [메모리 상위 프로세스]
+                %s
+                [최근 80초 추세]
+                %s""".formatted(gemini.toJson(status), gemini.toJson(detail),
+                gemini.toJson(topCpu), gemini.toJson(topMem), gemini.toJson(recent));
+
+        JsonNode result;
+        try {
+            result = gemini.extractJson(gemini.generate(prompt), false);
+        } catch (GeminiClient.AiBusyException e) {
+            return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (Exception e) {
+            return Map.of("ok", false, "reply", "원인 추적 실패: " + shortError(e));
+        }
+        return Map.of("ok", true, "server", server.label(), "status", status, "result", result);
+    }
+
+    // ===== AI 처리내역 초안 (알림 해제 시 처리 내용을 AI가 먼저 써 준다) =====
+    public Map<String, Object> noteDraft(Long serverId) {
+        if (!gemini.isConfigured()) {
+            return Map.of("ok", false, "reply", NOT_CONFIGURED);
+        }
+        MonitoredServer server = serverId == null ? null : servers.findById(serverId).orElse(null);
+        if (server == null) {
+            return Map.of("ok", false, "reply", "서버를 선택해 주세요.");
+        }
+        if (!servers.isOnline(serverId)) {
+            return Map.of("ok", false, "reply", "'" + server.label() + "' 서버가 오프라인 상태입니다.");
+        }
+        Map<String, Map<String, Object>> status = servers.judge(serverId).orElseThrow();
+        AgentReport report = servers.latest(serverId).orElseThrow().report();
+        List<Map<String, Object>> topCpu = report.procs().stream()
+                .sorted(Comparator.comparingDouble(AgentReport.Proc::cpu).reversed()).limit(3)
+                .map(p -> ordered("name", p.name(), "cpu", p.cpu())).toList();
+
+        String prompt = """
+                당신은 운영 담당자를 돕는 도우미입니다. 방금 처리한 알림의 '처리 내용'을 담당자가 검토·수정할 수 있게 초안으로 작성하세요.
+                아래 형식의 일반 텍스트로만 쓰세요(JSON·코드블록 금지). 원인은 단정하지 말고 "추정"으로,
+                아직 확인 안 된 부분은 후속 확인 항목으로 남기세요.
+
+                [원인] (근거 수치와 함께 추정)
+                [조치] (실제로 한 것으로 보이는 조치)
+                [후속] (확인·재발 방지 항목)
+
+                [서버] %s (%s)
+                [현재 상태 및 판정] %s
+                [CPU 상위 프로세스] %s""".formatted(
+                server.label(), server.getCompany(), gemini.toJson(status), gemini.toJson(topCpu));
+
+        String draft;
+        try {
+            draft = gemini.generate(prompt).strip()
+                    .replace("```", "").strip();
+        } catch (GeminiClient.AiBusyException e) {
+            return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (Exception e) {
+            return Map.of("ok", false, "reply", "초안 생성 실패: " + shortError(e));
+        }
+        return Map.of("ok", true, "server", server.label(), "draft", draft);
+    }
+
+    /** 담당자가 검토·승인한 처리 내용을 지식 베이스에 저장 */
+    public Map<String, Object> saveNote(Long serverId, String content) {
+        if (content == null || content.isBlank()) {
+            return Map.of("ok", false, "reply", "저장할 처리 내용이 없습니다.");
+        }
+        MonitoredServer server = serverId == null ? null : servers.findById(serverId).orElse(null);
+        String label = server != null ? server.label() : "미지정";
+        notes.add(serverId, label, content.strip());
+        return Map.of("ok", true, "reply", "처리내역을 저장했습니다. 다음 유사 장애 대응에 활용됩니다.");
+    }
+
+    public List<Map<String, Object>> noteHistory() {
+        return notes.recent(10);
+    }
+
+    // ===== AI 정책 튜닝 추천 (실측 이력 vs 임계치 비교로 오탐/미탐 탐지) =====
+    public Map<String, Object> policyTuning() {
+        if (!gemini.isConfigured()) {
+            return Map.of("ok", false, "reply", NOT_CONFIGURED);
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (MonitoredServer s : servers.findAll()) {
+            Map<String, double[]> stat = history.stats(s.getId(), 7);
+            if (stat.isEmpty()) {
+                continue;
+            }
+            Policy policy = policyService.policyFor(s.getPolicyId(), s.getCompany()).orElse(null);
+            if (policy == null) {
+                continue;
+            }
+            for (String metric : List.of("cpu", "memory", "disk")) {
+                double[] v = stat.get(metric);
+                Threshold th = policy.threshold(metric);
+                if (v == null || th == null) {
+                    continue;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("server", s.label());
+                row.put("company", policy.getCompany());
+                row.put("policy", policy.getName());
+                row.put("metric", metric);
+                row.put("avg", v[0]);
+                row.put("max", v[1]);
+                row.put("min", v[2]);
+                row.put("warn", th.getWarn());
+                row.put("danger", th.getDanger());
+                rows.add(row);
+            }
+        }
+        if (rows.isEmpty()) {
+            return Map.of("ok", true, "result", Map.of(
+                    "summary", "비교할 지표 이력이 아직 없습니다. Agent가 데이터를 수집한 뒤 다시 시도해 주세요.",
+                    "items", List.of()));
+        }
+
+        String prompt = """
+                당신은 모니터링 임계치 튜닝 전문가입니다. 각 정책의 '최근 7일 실측(avg/max/min)'과 '현재 임계치(warn/danger)'를
+                비교해 오탐(너무 민감해 알림이 상시 발생)·미탐(너무 둔감해 놓칠 위험)·적정을 진단하고 조정값을 제안하세요.
+
+                [규칙]
+                - 실측 평균이 warn을 상시 넘으면 오탐 위험, 실측 최대가 danger보다 크게 낮으면 미탐 위험 가능성입니다.
+                - 제안값은 0~100 범위의 정수로, 근거(수치)를 함께 쓰세요. 적정이면 유지 권장으로 두세요.
+                - 반드시 JSON만 답하세요.
+
+                [출력 형식]
+                {"summary": "전체 한 줄 요약", "items": [{"company": "고객사", "policy": "정책명", "metric": "cpu|memory|disk", "verdict": "오탐 위험|미탐 위험|적정", "reason": "근거(수치 포함)", "suggestWarn": 정수 또는 null, "suggestDanger": 정수 또는 null}]}
+
+                [실측 vs 임계치]
+                %s""".formatted(gemini.toJson(rows));
+
+        JsonNode result;
+        try {
+            result = gemini.extractJson(gemini.generate(prompt), false);
+        } catch (GeminiClient.AiBusyException e) {
+            return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (Exception e) {
+            return Map.of("ok", false, "reply", "정책 점검 실패: " + shortError(e));
+        }
+        return Map.of("ok", true, "result", result);
+    }
+
+    /** 튜닝 추천을 실제 적용 (검증·저장은 기존 PolicyService가) */
+    public Map<String, Object> applyTuning(String company, String policy, String metric, String level, int value) {
+        ChangeResult r = policyService.changeThreshold(company, policy, metric, level, value);
+        return Map.of("ok", r.ok(), "reply", r.message());
+    }
+
+    // ===== AI 서술형 보고서 / 교대 인수인계 =====
+    public Map<String, Object> report(int hours) {
+        if (!gemini.isConfigured()) {
+            return Map.of("ok", false, "reply", NOT_CONFIGURED);
+        }
+        int online = 0, offline = 0, danger = 0, caution = 0, normal = 0;
+        List<Map<String, Object>> serverData = new ArrayList<>();
+        for (MonitoredServer s : servers.findAll()) {
+            Long id = s.getId();
+            Map<String, Map<String, Object>> judged = servers.isOnline(id)
+                    ? servers.judge(id).orElse(null) : null;
+            if (judged == null) {
+                offline++;
+                continue;
+            }
+            online++;
+            String worst = PolicyService.worst(judged);
+            switch (worst) {
+                case "위험" -> danger++;
+                case "주의" -> caution++;
+                default -> normal++;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("server", s.label());
+            row.put("company", s.getCompany());
+            row.put("level", worst);
+            row.put("now", judged);
+            Map<String, double[]> stat = history.stats(id, 1);
+            if (!stat.isEmpty()) {
+                Map<String, Object> trend = new LinkedHashMap<>();
+                stat.forEach((k, v) -> trend.put(k, Map.of("avg", v[0], "max", v[1], "min", v[2])));
+                row.put("todayTrend", trend);
+            }
+            serverData.add(row);
+        }
+        String overallLevel = danger > 0 ? "위험" : caution > 0 ? "주의" : "정상";
+        Map<String, Object> overall = new LinkedHashMap<>();
+        overall.put("level", overallLevel);
+        overall.put("total", online + offline);
+        overall.put("online", online);
+        overall.put("offline", offline);
+        overall.put("danger", danger);
+        overall.put("caution", caution);
+        overall.put("normal", normal);
+
+        if (online == 0) {
+            return Map.of("ok", true, "overall", overall, "period", hours + "시간", "result", Map.of(
+                    "summary", "온라인 서버가 없어 보고할 내용이 없습니다.",
+                    "trends", "", "open", "", "handover", "Agent 실행 여부를 확인해 주세요."));
+        }
+
+        String prompt = """
+                당신은 시스템 운영 총괄입니다. 최근 %d시간 운영 상황을 교대 근무자에게 넘길 인수인계 보고서로 작성하세요.
+                (이 환경에는 별도 알림 이벤트 로그가 없으므로, 현재 상태와 오늘 자원 추세(todayTrend: 평균/최대/최소)를 근거로 씁니다.)
+
+                [규칙]
+                - 판정·집계는 코드가 내렸습니다. 해석만 하세요. 원인은 단정하지 말고 근거 수치를 함께 쓰세요.
+                - 차트가 아니라 '문장'으로, 다음 근무자가 바로 이해하도록 쉽게 쓰세요. 반드시 JSON만 답하세요.
+
+                [출력 형식]
+                {"summary": "한눈에 1~2문장", "trends": "자원 추세 요약", "open": "지금 주의/위험이라 지켜봐야 할 서버", "handover": "다음 근무자 인계 사항"}
+
+                [전체 집계]
+                %s
+                [서버별 현재 상태 + 오늘 추세]
+                %s""".formatted(hours, gemini.toJson(overall), gemini.toJson(serverData));
+
+        JsonNode result;
+        try {
+            result = gemini.extractJson(gemini.generate(prompt), false);
+        } catch (GeminiClient.AiBusyException e) {
+            return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (Exception e) {
+            return Map.of("ok", false, "reply", "보고서 생성 실패: " + shortError(e));
+        }
+        return Map.of("ok", true, "overall", overall, "period", hours + "시간", "result", result);
+    }
+
+    // ===== AI 자연어 질의 (말로 물으면 현재 서버 데이터에서 답을 찾아준다) =====
+    public Map<String, Object> query(String text) {
+        if (!gemini.isConfigured()) {
+            return Map.of("ok", false, "reply", NOT_CONFIGURED);
+        }
+        if (text == null || text.isBlank()) {
+            return Map.of("ok", false, "reply", "질문을 입력해 주세요.");
+        }
+        List<Map<String, Object>> fleet = new ArrayList<>();
+        for (MonitoredServer s : servers.findAll()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("server", s.label());
+            row.put("company", s.getCompany());
+            boolean online = servers.isOnline(s.getId());
+            row.put("online", online);
+            if (online) {
+                Map<String, Map<String, Object>> judged = servers.judge(s.getId()).orElse(null);
+                if (judged != null) {
+                    row.put("cpu", judged.get("cpu").get("value"));
+                    row.put("memory", judged.get("memory").get("value"));
+                    row.put("disk", judged.get("disk").get("value"));
+                    row.put("level", PolicyService.worst(judged));
+                }
+            }
+            fleet.add(row);
+        }
+
+        String prompt = """
+                당신은 모니터링 데이터를 조회해 주는 도우미입니다. 아래 '서버 데이터'만 근거로 사용자의 질문에 답하세요.
+                데이터에 없는 항목(로그·세션·네트워크 경로 등)을 물으면 rows는 비우고 note에 "현재 수집 대상이 아닙니다"라고 답하세요.
+
+                [규칙]
+                - 질문을 어떤 조건으로 해석했는지 parsed에 짧은 태그로 남기세요(예: "대상: 테라넷", "조건: 메모리 > 80%").
+                - 표로 답하되 columns/rows의 칸 수를 맞추세요. 수치는 데이터 그대로 쓰세요. 반드시 JSON만 답하세요.
+
+                [출력 형식]
+                {"parsed": ["태그1", "태그2"], "columns": ["칼럼1", "칼럼2"], "rows": [["값1", "값2"]], "note": "N건 또는 안내"}
+
+                [서버 데이터]
+                %s
+
+                [사용자 질문]
+                %s""".formatted(gemini.toJson(fleet), text);
+
+        JsonNode result;
+        try {
+            result = gemini.extractJson(gemini.generate(prompt), false);
+        } catch (GeminiClient.AiBusyException e) {
+            return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (Exception e) {
+            return Map.of("ok", false, "reply", "질의 처리 실패: " + shortError(e));
+        }
+        return Map.of("ok", true, "result", result);
+    }
+
+    private static String shortError(Exception e) {
+        String msg = String.valueOf(e.getMessage());
+        return e.getClass().getSimpleName() + ": " + msg.substring(0, Math.min(200, msg.length()));
     }
 
     private static Map<String, Object> ordered(String k1, Object v1, String k2, Object v2) {
