@@ -11,6 +11,7 @@
     {
       label: "AI 운영 도우미",
       children: [
+        { label: "운영 브리핑", href: "/ai#briefing" },
         { label: "상태 진단", href: "/ai#diagnose" },
         { label: "임계치 변경", href: "/ai#threshold" },
       ],
@@ -79,7 +80,7 @@
     const [path, hash] = href.split("#");
     if (path !== location.pathname) return false;
     if (!hash) return true;
-    return (location.hash.slice(1) || "diagnose") === hash;
+    return (location.hash.slice(1) || "briefing") === hash;
   }
 
   function render() {

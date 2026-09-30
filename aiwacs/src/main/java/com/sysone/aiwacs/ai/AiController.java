@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** AI 운영 도우미 API (진단 / 자연어 임계치 설정) */
+/** AI 운영 도우미 API (운영 브리핑 / 진단 / 자연어 임계치 설정) */
 @RestController
 @RequestMapping("/api/ai")
 public class AiController {
@@ -16,6 +16,12 @@ public class AiController {
 
     public AiController(AiService aiService) {
         this.aiService = aiService;
+    }
+
+    /** 전 서버 상황을 한 번에 요약한 운영 브리핑 (요청 본문 없음) */
+    @PostMapping("/briefing")
+    public Map<String, Object> briefing() {
+        return aiService.briefing();
     }
 
     @PostMapping("/threshold")

@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import com.sysone.aiwacs.history.MetricHistoryService;
 import com.sysone.aiwacs.policy.PolicyService;
 import com.sysone.aiwacs.policy.PolicyService.ChangeResult;
 import com.sysone.aiwacs.server.AgentReport;
@@ -31,11 +32,14 @@ public class AiService {
     private final GeminiClient gemini;
     private final PolicyService policyService;
     private final ServerService servers;
+    private final MetricHistoryService history;
 
-    public AiService(GeminiClient gemini, PolicyService policyService, ServerService servers) {
+    public AiService(GeminiClient gemini, PolicyService policyService, ServerService servers,
+                     MetricHistoryService history) {
         this.gemini = gemini;
         this.policyService = policyService;
         this.servers = servers;
+        this.history = history;
     }
 
     // ===== AI 임계치 변경 (기업+정책 지정, 여러 개 동시 가능) =====
@@ -243,6 +247,120 @@ public class AiService {
         }
 
         return Map.of("ok", true, "server", server.label(), "status", status, "diagnosis", result);
+    }
+
+    // ===== AI 운영 브리핑 (전 서버 상황 요약 + 우선순위 조치) =====
+    // 여러 대의 서버를 한 번에 훑어, 신입 운영자가 "지금 무엇부터 봐야 하는지" 알 수 있게 정리한다.
+    // 판정·집계는 코드가(설계 원칙 "판정은 코드"), 우선순위와 원인·조치 해석은 AI가 한다.
+    public Map<String, Object> briefing() {
+        if (!gemini.isConfigured()) {
+            return Map.of("ok", false, "reply", NOT_CONFIGURED);
+        }
+
+        int online = 0, offline = 0, danger = 0, caution = 0, normal = 0;
+        List<Map<String, Object>> serverData = new ArrayList<>();
+
+        for (MonitoredServer s : servers.findAll()) {
+            Long id = s.getId();
+            // 오프라인(10초간 수신 없음) 서버는 판정하지 않는다 — 마지막 값으로 정상/위험을 말하면 오해 소지
+            Map<String, Map<String, Object>> judged = servers.isOnline(id)
+                    ? servers.judge(id).orElse(null) : null;
+            if (judged == null) {
+                offline++;
+                continue;
+            }
+            online++;
+            String worst = PolicyService.worst(judged);
+            switch (worst) {
+                case "위험" -> danger++;
+                case "주의" -> caution++;
+                default -> normal++;
+            }
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("server", s.label());
+            row.put("company", s.getCompany());
+            row.put("policy", servers.summary(s).get("policyName")); // 판정 기준이 된 정책
+            row.put("level", worst);
+            row.put("metrics", judged); // cpu/memory/disk 각각 value + status
+
+            // 주의·위험 서버에만 근본원인 판단 재료(세부지표·상위 프로세스·최근 추세)를 담는다.
+            // 정상 서버까지 다 담으면 프롬프트가 불필요하게 커진다.
+            if (!"정상".equals(worst)) {
+                servers.latest(id).ifPresent(snap -> {
+                    AgentReport report = snap.report();
+                    Map<String, Object> detail = new LinkedHashMap<>();
+                    if (report.detail() != null) detail.putAll(report.detail());
+                    if (report.io() != null) detail.putAll(report.io());
+                    if (!detail.isEmpty()) row.put("detail", detail);
+                    row.put("topCpu", report.procs().stream()
+                            .sorted(Comparator.comparingDouble(AgentReport.Proc::cpu).reversed()).limit(3)
+                            .map(p -> ordered("name", p.name(), "cpu", p.cpu())).toList());
+                    row.put("topMem", report.procs().stream()
+                            .sorted(Comparator.comparingDouble(AgentReport.Proc::mem).reversed()).limit(3)
+                            .map(p -> ordered("name", p.name(), "mem", p.mem())).toList());
+                });
+                // 최근 80초 추세: 값이 급증하는 중인지, 계속 높은 상태인지 구분하는 근거
+                List<Map<String, Object>> recent = history.recent(id);
+                if (!recent.isEmpty()) {
+                    row.put("recent", recent);
+                }
+            }
+            serverData.add(row);
+        }
+
+        // 전체 대표 상태와 집계는 코드가 결정한다 (일관성).
+        String overallLevel = danger > 0 ? "위험" : caution > 0 ? "주의" : "정상";
+        Map<String, Object> overall = new LinkedHashMap<>();
+        overall.put("level", overallLevel);
+        overall.put("total", online + offline);
+        overall.put("online", online);
+        overall.put("offline", offline);
+        overall.put("danger", danger);
+        overall.put("caution", caution);
+        overall.put("normal", normal);
+
+        if (online == 0) {
+            return Map.of("ok", true, "overall", overall, "briefing", Map.of(
+                    "summary", "현재 온라인 상태인 서버가 없어 브리핑할 내용이 없습니다. Agent 실행 여부를 확인해 주세요.",
+                    "priorities", List.of(),
+                    "watch", ""));
+        }
+
+        String prompt = """
+                당신은 20년 경력의 시스템 운영 총괄입니다. 여러 서버의 현재 상태를 한 번에 살펴보고,
+                신입 운영자가 "지금 무엇부터 봐야 하는지" 알 수 있도록 교대 브리핑을 작성하세요.
+
+                [작성 규칙]
+                - 상태 판정(정상/주의/위험)과 집계는 이미 시스템이 코드로 내렸습니다. 바꾸지 말고 해석만 하세요.
+                - 주의·위험 서버를 급한 순서로 정리하고(위험이 주의보다 먼저), 각 서버마다 '가능성 있는 원인'과 '권장 조치'를 제시하세요.
+                - 원인은 단정하지 마세요. "~일 가능성이 있습니다" 형태로, 근거가 된 수치(세부지표·프로세스·최근 추세)를 함께 언급하세요.
+                - 최근 80초 추세(recent)를 보고 값이 급증하는 중인지, 계속 높은 상태인지 구분해 언급하세요.
+                - 정상 서버는 개별로 나열하지 말고, 지금은 괜찮지만 지켜볼 만한 점이 있으면 watch에 한 줄로 적으세요.
+                - IT 비전문가도 이해하도록 쉬운 말로 쓰되, 전문용어는 괄호로 풀어주세요.
+                - 반드시 아래 JSON 형식으로만 답하세요. 다른 말 금지.
+
+                [출력 형식]
+                {"summary": "전 서버 상황을 1~2문장으로", "priorities": [{"server": "서버 이름", "level": "주의|위험", "issue": "무엇이 문제인지 쉽게", "cause": "가능성 있는 원인(근거 수치 포함)", "action": "권장 조치를 단계로"}], "watch": "지금은 정상이나 지켜볼 서버/지표(없으면 빈 문자열)"}
+
+                [전체 집계] (코드가 판정)
+                %s
+
+                [서버별 현재 상태] (주의·위험 서버에는 세부지표·상위 프로세스·최근 80초 추세 포함)
+                %s""".formatted(gemini.toJson(overall), gemini.toJson(serverData));
+
+        JsonNode result;
+        try {
+            result = gemini.extractJson(gemini.generate(prompt), false);
+        } catch (GeminiClient.AiBusyException e) {
+            return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (Exception e) {
+            String msg = String.valueOf(e.getMessage());
+            return Map.of("ok", false, "reply", "브리핑 생성 실패: " + e.getClass().getSimpleName() + ": "
+                    + msg.substring(0, Math.min(200, msg.length())));
+        }
+
+        return Map.of("ok", true, "overall", overall, "briefing", result);
     }
 
     private static Map<String, Object> ordered(String k1, Object v1, String k2, Object v2) {

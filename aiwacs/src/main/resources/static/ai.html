@@ -374,6 +374,61 @@
         color: #2c3350;
         line-height: 1.6;
       }
+      /* 운영 브리핑: 집계 타일 + 우선순위 카드 */
+      .brief-tiles {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+      }
+      .brief-tile {
+        border: 1px solid #eef0f4;
+        border-radius: 8px;
+        padding: 12px 18px;
+        min-width: 78px;
+        text-align: center;
+        background: #fff;
+      }
+      .brief-tile .bt-num {
+        font-size: 22px;
+        font-weight: 800;
+      }
+      .brief-tile .bt-lab {
+        font-size: 11px;
+        color: #9098aa;
+        margin-top: 2px;
+      }
+      .brief-prio {
+        border: 1px solid #eef0f4;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+        background: #fff;
+      }
+      .brief-prio .bp-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .brief-prio .bp-rank {
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: #3f6ad8;
+        color: #fff;
+        font-weight: 800;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .brief-prio .bp-server {
+        font-weight: 700;
+        color: #3a3f52;
+      }
     </style>
   </head>
   <body>
@@ -390,6 +445,13 @@
           <div class="top-tabs">
             <div
               class="top-tab active"
+              data-tab="briefing"
+              onclick="switchTab('briefing')"
+            >
+              AI 운영 브리핑
+            </div>
+            <div
+              class="top-tab"
               data-tab="diagnose"
               onclick="switchTab('diagnose')"
             >
@@ -404,8 +466,25 @@
             </div>
           </div>
 
+          <!-- 운영 브리핑 패널 -->
+          <div class="ai-panel" id="panel-briefing">
+            <div class="ai-head">
+              <span class="title">AI 운영 브리핑</span>
+              <span class="badge">NEW</span>
+              <span class="sub"
+                >— 전체 서버 상태를 한 번에 요약하고, 지금 무엇부터 볼지 알려줍니다</span
+              >
+            </div>
+            <div class="diag-body">
+              <button class="diag-btn" id="brief-btn" onclick="runBriefing()">
+                운영 브리핑 생성
+              </button>
+              <div id="brief-result" class="diag-result"></div>
+            </div>
+          </div>
+
           <!-- 진단 패널 -->
-          <div class="ai-panel" id="panel-diagnose">
+          <div class="ai-panel" id="panel-diagnose" style="display: none">
             <div class="ai-head">
               <span class="title">AI 상태 진단</span>
               <span class="badge">NEW</span>
@@ -461,28 +540,108 @@
       </div>
     </div>
     <script>
+      const TABS = ["briefing", "diagnose", "threshold"];
+
       // 탭 전환
       function switchTab(tab) {
         document
           .querySelectorAll(".top-tab")
           .forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
-        document.getElementById("panel-diagnose").style.display =
-          tab === "diagnose" ? "block" : "none";
-        document.getElementById("panel-threshold").style.display =
-          tab === "threshold" ? "block" : "none";
-        // 주소 끝(#diagnose / #threshold)을 맞춰서 사이드바 선택 표시와 새로고침 후에도 같은 탭 유지
+        TABS.forEach((name) => {
+          const panel = document.getElementById("panel-" + name);
+          if (panel) panel.style.display = name === tab ? "block" : "none";
+        });
+        // 주소 끝(#briefing / #diagnose / #threshold)을 맞춰서 사이드바 선택 표시와 새로고침 후에도 같은 탭 유지
         if (location.hash.slice(1) !== tab) {
           history.replaceState(null, "", "#" + tab);
           if (window.refreshSidebar) refreshSidebar();
         }
       }
 
-      // 사이드바에서 상태 진단 / 임계치 변경을 누르면 해당 탭으로
+      // 사이드바에서 운영 브리핑 / 상태 진단 / 임계치 변경을 누르면 해당 탭으로 (기본: 운영 브리핑)
       function openTabFromHash() {
-        switchTab(location.hash === "#threshold" ? "threshold" : "diagnose");
+        const t = location.hash.slice(1);
+        switchTab(TABS.includes(t) ? t : "briefing");
       }
       window.addEventListener("hashchange", openTabFromHash);
       openTabFromHash();
+
+      // AI 운영 브리핑 실행 (전 서버를 한 번에 요약)
+      async function runBriefing() {
+        const btn = document.getElementById("brief-btn");
+        const result = document.getElementById("brief-result");
+        btn.disabled = true;
+        result.innerHTML =
+          '<div style="color:#9098aa;padding:20px;">AI가 전체 서버를 살펴보는 중입니다...</div>';
+        try {
+          const res = await fetch("/api/ai/briefing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            result.innerHTML = `<div style="color:#d64545;padding:20px;">${data.reply}</div>`;
+            btn.disabled = false;
+            return;
+          }
+
+          const o = data.overall;
+          const b = data.briefing;
+          const levelColor =
+            o.level === "위험"
+              ? "st-위험"
+              : o.level === "주의"
+                ? "st-주의"
+                : "st-정상";
+
+          // 집계 타일 (판정·집계는 코드가 내린 값)
+          const tiles = `<div class="brief-tiles">
+        <div class="brief-tile"><div class="bt-num">${o.total}</div><div class="bt-lab">전체</div></div>
+        <div class="brief-tile"><div class="bt-num" style="color:#d64545">${o.danger}</div><div class="bt-lab">위험</div></div>
+        <div class="brief-tile"><div class="bt-num" style="color:#b0791a">${o.caution}</div><div class="bt-lab">주의</div></div>
+        <div class="brief-tile"><div class="bt-num" style="color:#2e9e52">${o.normal}</div><div class="bt-lab">정상</div></div>
+        <div class="brief-tile"><div class="bt-num" style="color:#9098aa">${o.offline}</div><div class="bt-lab">오프라인</div></div>
+      </div>`;
+
+          // 우선순위 조치 (AI가 급한 순서로 정리)
+          const prios = Array.isArray(b.priorities) ? b.priorities : [];
+          const plist = prios.length
+            ? prios
+                .map(
+                  (p, i) => `<div class="brief-prio">
+          <div class="bp-head">
+            <span class="bp-rank">${i + 1}</span>
+            <span class="diag-level ${p.level === "위험" ? "st-위험" : "st-주의"}" style="margin:0">${p.level}</span>
+            <span class="bp-server">${p.server || ""}</span>
+          </div>
+          <div class="diag-row"><div class="r-label">문제</div><div class="r-text">${p.issue || ""}</div></div>
+          <div class="diag-row"><div class="r-label">가능성 있는 원인</div><div class="r-text">${p.cause || ""}</div></div>
+          <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${p.action || ""}</div></div>
+        </div>`,
+                )
+                .join("")
+            : '<div class="r-text" style="color:#2e9e52;padding:8px 0;">현재 주의·위험 상태인 서버가 없습니다. 👍</div>';
+
+          const watch = b.watch
+            ? `<div class="diag-correlation"><div class="corr-label">👀 지켜볼 것</div><div class="corr-text">${b.watch}</div></div>`
+            : "";
+
+          result.innerHTML =
+            tiles +
+            `<div class="diag-card">
+        <span class="diag-level ${levelColor}">전체 상태: ${o.level}</span>
+        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${b.summary || ""}</div></div>
+        ${watch}
+        <div class="diag-row"><div class="r-label">우선순위 조치</div></div>
+        ${plist}
+      </div>`;
+        } catch (e) {
+          result.innerHTML =
+            '<div style="color:#d64545;padding:20px;">브리핑 생성 중 오류가 발생했습니다.</div>';
+        }
+        btn.disabled = false;
+      }
 
       // AI 진단 실행
       async function runDiagnose() {
