@@ -27,19 +27,20 @@ import tools.jackson.databind.JsonNode;
 @Service
 public class AiService {
 
-    private static final String NOT_CONFIGURED = "AI가 설정되지 않았습니다 (API 키 확인 필요).";
+    private static final String NOT_CONFIGURED = "AI가 설정되지 않았습니다 (AI 설정값 확인 필요).";
     private static final String NOT_UNDERSTOOD = "명령을 이해하지 못했습니다. 다시 말씀해 주세요.";
+    private static final String AI_UNAVAILABLE = "AI 서버에 연결할 수 없습니다. 로컬 AI(Ollama)가 실행 중인지 확인해 주세요.";
     private static final String AI_BUSY = "AI 서버에 요청이 몰려 잠시 응답하지 못하고 있습니다. 잠시 후 다시 시도해 주세요.";
 
-    private final GeminiClient gemini;
+    private final AiClient ai;
     private final PolicyService policyService;
     private final ServerService servers;
     private final MetricHistoryService history;
     private final HandlingNoteStore notes;
 
-    public AiService(GeminiClient gemini, PolicyService policyService, ServerService servers,
+    public AiService(AiClient ai, PolicyService policyService, ServerService servers,
                      MetricHistoryService history, HandlingNoteStore notes) {
-        this.gemini = gemini;
+        this.ai = ai;
         this.policyService = policyService;
         this.servers = servers;
         this.history = history;
@@ -48,7 +49,7 @@ public class AiService {
 
     // ===== AI 임계치 변경 (기업+정책 지정, 여러 개 동시 가능) =====
     public Map<String, Object> changeThreshold(String userMsg) {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
 
@@ -76,13 +77,15 @@ public class AiService {
                 - value: 퍼센트 숫자만 (0~100)
                 - 명령을 전혀 이해할 수 없으면 [{"error": "이해할 수 없는 명령입니다"}]
 
-                사용자 명령: %s""".formatted(gemini.toJson(policyList), userMsg);
+                사용자 명령: %s""".formatted(ai.toJson(policyList), userMsg);
 
         JsonNode parsed;
         try {
-            parsed = gemini.extractJson(gemini.generate(prompt), true);
-        } catch (GeminiClient.AiBusyException e) {
+            parsed = ai.extractJson(ai.generate(prompt), true);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             return Map.of("ok", false, "reply", NOT_UNDERSTOOD);
         }
@@ -155,7 +158,7 @@ public class AiService {
 
     // ===== AI 상태 진단 + 원인 프로세스 유추 =====
     public Map<String, Object> diagnose(Long serverId) {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
 
@@ -190,7 +193,7 @@ public class AiService {
         serverInfo.put("company", server.getCompany());
         serverInfo.put("policy", servers.summary(server).get("policyName")); // 판정 기준이 된 정책
 
-        // 3) Gemini에게 해석 요청
+        // 3) AI에게 해석 요청
         String prompt = """
                 당신은 20년 경력의 시스템 성능 분석 전문가입니다.
                 아래 서버 상태와 세부 지표를 종합 분석하되, 반드시 규칙을 지키세요.
@@ -236,14 +239,16 @@ public class AiService {
                 %s
 
                 [디스크 I/O 상위 프로세스] (io_kb_s: 읽기+쓰기 KB/s, major_faults_s: 해당 프로세스의 major 폴트/초)
-                %s""".formatted(gemini.toJson(serverInfo), gemini.toJson(status), gemini.toJson(detail),
-                gemini.toJson(topCpu), gemini.toJson(topMem), gemini.toJson(topIo));
+                %s""".formatted(ai.toJson(serverInfo), ai.toJson(status), ai.toJson(detail),
+                ai.toJson(topCpu), ai.toJson(topMem), ai.toJson(topIo));
 
         JsonNode result;
         try {
-            result = gemini.extractJson(gemini.generate(prompt), false);
-        } catch (GeminiClient.AiBusyException e) {
+            result = ai.extractJson(ai.generate(prompt), false);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             String msg = String.valueOf(e.getMessage());
             return Map.of("ok", false, "reply", "진단 실패: " + e.getClass().getSimpleName() + ": "
@@ -257,7 +262,7 @@ public class AiService {
     // 여러 대의 서버를 한 번에 훑어, 신입 운영자가 "지금 무엇부터 봐야 하는지" 알 수 있게 정리한다.
     // 판정·집계는 코드가(설계 원칙 "판정은 코드"), 우선순위와 원인·조치 해석은 AI가 한다.
     public Map<String, Object> briefing() {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
 
@@ -351,13 +356,15 @@ public class AiService {
                 %s
 
                 [서버별 현재 상태] (주의·위험 서버에는 세부지표·상위 프로세스·최근 80초 추세 포함)
-                %s""".formatted(gemini.toJson(overall), gemini.toJson(serverData));
+                %s""".formatted(ai.toJson(overall), ai.toJson(serverData));
 
         JsonNode result;
         try {
-            result = gemini.extractJson(gemini.generate(prompt), false);
-        } catch (GeminiClient.AiBusyException e) {
+            result = ai.extractJson(ai.generate(prompt), false);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             String msg = String.valueOf(e.getMessage());
             return Map.of("ok", false, "reply", "브리핑 생성 실패: " + e.getClass().getSimpleName() + ": "
@@ -369,7 +376,7 @@ public class AiService {
 
     // ===== AI 원인 추적 (한 서버의 여러 신호를 자동으로 모아 원인 사슬로 연결) =====
     public Map<String, Object> rootcause(Long serverId) {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
         MonitoredServer server = serverId == null ? null : servers.findById(serverId).orElse(null);
@@ -417,14 +424,16 @@ public class AiService {
                 [메모리 상위 프로세스]
                 %s
                 [최근 80초 추세]
-                %s""".formatted(gemini.toJson(status), gemini.toJson(detail),
-                gemini.toJson(topCpu), gemini.toJson(topMem), gemini.toJson(recent));
+                %s""".formatted(ai.toJson(status), ai.toJson(detail),
+                ai.toJson(topCpu), ai.toJson(topMem), ai.toJson(recent));
 
         JsonNode result;
         try {
-            result = gemini.extractJson(gemini.generate(prompt), false);
-        } catch (GeminiClient.AiBusyException e) {
+            result = ai.extractJson(ai.generate(prompt), false);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             return Map.of("ok", false, "reply", "원인 추적 실패: " + shortError(e));
         }
@@ -433,7 +442,7 @@ public class AiService {
 
     // ===== AI 처리내역 초안 (알림 해제 시 처리 내용을 AI가 먼저 써 준다) =====
     public Map<String, Object> noteDraft(Long serverId) {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
         MonitoredServer server = serverId == null ? null : servers.findById(serverId).orElse(null);
@@ -461,14 +470,16 @@ public class AiService {
                 [서버] %s (%s)
                 [현재 상태 및 판정] %s
                 [CPU 상위 프로세스] %s""".formatted(
-                server.label(), server.getCompany(), gemini.toJson(status), gemini.toJson(topCpu));
+                server.label(), server.getCompany(), ai.toJson(status), ai.toJson(topCpu));
 
         String draft;
         try {
-            draft = gemini.generate(prompt).strip()
+            draft = ai.generate(prompt).strip()
                     .replace("```", "").strip();
-        } catch (GeminiClient.AiBusyException e) {
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             return Map.of("ok", false, "reply", "초안 생성 실패: " + shortError(e));
         }
@@ -492,7 +503,7 @@ public class AiService {
 
     // ===== AI 정책 튜닝 추천 (실측 이력 vs 임계치 비교로 오탐/미탐 탐지) =====
     public Map<String, Object> policyTuning() {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -543,13 +554,15 @@ public class AiService {
                 {"summary": "전체 한 줄 요약", "items": [{"company": "고객사", "policy": "정책명", "metric": "cpu|memory|disk", "verdict": "오탐 위험|미탐 위험|적정", "reason": "근거(수치 포함)", "suggestWarn": 정수 또는 null, "suggestDanger": 정수 또는 null}]}
 
                 [실측 vs 임계치]
-                %s""".formatted(gemini.toJson(rows));
+                %s""".formatted(ai.toJson(rows));
 
         JsonNode result;
         try {
-            result = gemini.extractJson(gemini.generate(prompt), false);
-        } catch (GeminiClient.AiBusyException e) {
+            result = ai.extractJson(ai.generate(prompt), false);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             return Map.of("ok", false, "reply", "정책 점검 실패: " + shortError(e));
         }
@@ -564,7 +577,7 @@ public class AiService {
 
     // ===== AI 서술형 보고서 / 교대 인수인계 =====
     public Map<String, Object> report(int hours) {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
         int online = 0, offline = 0, danger = 0, caution = 0, normal = 0;
@@ -627,13 +640,15 @@ public class AiService {
                 [전체 집계]
                 %s
                 [서버별 현재 상태 + 오늘 추세]
-                %s""".formatted(hours, gemini.toJson(overall), gemini.toJson(serverData));
+                %s""".formatted(hours, ai.toJson(overall), ai.toJson(serverData));
 
         JsonNode result;
         try {
-            result = gemini.extractJson(gemini.generate(prompt), false);
-        } catch (GeminiClient.AiBusyException e) {
+            result = ai.extractJson(ai.generate(prompt), false);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             return Map.of("ok", false, "reply", "보고서 생성 실패: " + shortError(e));
         }
@@ -642,7 +657,7 @@ public class AiService {
 
     // ===== AI 자연어 질의 (말로 물으면 현재 서버 데이터에서 답을 찾아준다) =====
     public Map<String, Object> query(String text) {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
         if (text == null || text.isBlank()) {
@@ -682,13 +697,15 @@ public class AiService {
                 %s
 
                 [사용자 질문]
-                %s""".formatted(gemini.toJson(fleet), text);
+                %s""".formatted(ai.toJson(fleet), text);
 
         JsonNode result;
         try {
-            result = gemini.extractJson(gemini.generate(prompt), false);
-        } catch (GeminiClient.AiBusyException e) {
+            result = ai.extractJson(ai.generate(prompt), false);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             return Map.of("ok", false, "reply", "질의 처리 실패: " + shortError(e));
         }
@@ -702,7 +719,7 @@ public class AiService {
 
     /** demo=true면 우리가 부하 실험에서 실제로 본 알림 세트를, false면 현재 판정 기반 실알림을 묶는다. */
     public Map<String, Object> groupAlarms(boolean demo) {
-        if (!gemini.isConfigured()) {
+        if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
         }
         List<Map<String, Object>> alarms = demo ? demoAlarms() : currentAlarms();
@@ -730,13 +747,15 @@ public class AiService {
                 {"events": [{"title": "사건 요약(예: server1 CPU 포화)", "server": "서버", "level": "주의|경고|위험", "count": 묶은 알림 수, "members": ["원본 알림 요약1", "원본 알림 요약2"], "cause": "조합으로 본 원인 추정", "action": "권장 조치"}]}
 
                 [발생 알림]
-                %s""".formatted(gemini.toJson(alarms));
+                %s""".formatted(ai.toJson(alarms));
 
         JsonNode result;
         try {
-            result = gemini.extractJson(gemini.generate(prompt), false);
-        } catch (GeminiClient.AiBusyException e) {
+            result = ai.extractJson(ai.generate(prompt), false);
+        } catch (AiClient.AiBusyException e) {
             return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (AiClient.AiUnavailableException e) {
+            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
         } catch (Exception e) {
             return Map.of("ok", false, "reply", "알림 그룹핑 실패: " + shortError(e));
         }
