@@ -88,6 +88,13 @@ public class AiController {
         return aiService.report(hours);
     }
 
+    /** AI 알림 그룹핑 (여러 지표 알림을 한 사건으로 묶기) — body: {"demo": true|false} */
+    @PostMapping("/alarm-group")
+    public Map<String, Object> alarmGroup(@RequestBody(required = false) Map<String, Object> body) {
+        boolean demo = body != null && Boolean.parseBoolean(String.valueOf(body.get("demo")));
+        return aiService.groupAlarms(demo);
+    }
+
     /** 자연어 통합 질의 */
     @PostMapping("/query")
     public Map<String, Object> query(@RequestBody Map<String, Object> body) {

@@ -107,6 +107,16 @@
       .lv-주의 { background: #fbf1da; color: #c9820a; }
       .lv-위험 { background: #fbe9e9; color: #d64545; }
       .lv-오프라인 { background: #eef0f3; color: #6b7280; }
+      .lv-경고 { background: #fbe6d6; color: #c9600a; }
+      .lv-장애 { background: #f6d7d7; color: #a02020; }
+
+      /* 알림 그룹핑: 원본 → AI 묶음 */
+      .algrp { display: grid; grid-template-columns: 1fr 36px 1fr; gap: 12px; align-items: start; }
+      .algrp-arrow { align-self: center; text-align: center; color: #3f6ad8; font-weight: 800; font-size: 22px; }
+      .algrp-h { font-weight: 700; color: #3a3f52; font-size: 12.5px; margin-bottom: 8px; }
+      .algrp-raw { background: #fff; border: 1px solid #e3e6ec; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 12.5px; }
+      .algrp-raw b { color: #232838; }
+      @media (max-width: 720px) { .algrp { grid-template-columns: 1fr; } .algrp-arrow { transform: rotate(90deg); } }
 
       /* AI 결과 카드 */
       .ai-card { background: #f8f9fc; border: 1px solid #e3e6ec; border-radius: 10px; padding: 18px; }
@@ -213,6 +223,7 @@
 
           <div class="subtabs" id="subtabs">
             <button class="subtab" data-tab="briefing" onclick="switchTab('briefing')">운영 브리핑<span class="tag">NEW</span></button>
+            <button class="subtab" data-tab="alarmgroup" onclick="switchTab('alarmgroup')">알림 그룹핑<span class="tag">NEW</span></button>
             <button class="subtab" data-tab="rootcause" onclick="switchTab('rootcause')">원인 추적<span class="tag">NEW</span></button>
             <button class="subtab" data-tab="note" onclick="switchTab('note')">처리내역 초안<span class="tag">NEW</span></button>
             <button class="subtab" data-tab="tuning" onclick="switchTab('tuning')">정책 튜닝<span class="tag">NEW</span></button>
@@ -228,6 +239,19 @@
             <button class="btn" id="brief-btn" onclick="runBriefing()">운영 브리핑 생성</button>
             <span class="demo" style="margin-left:10px">판정·집계는 코드가, 우선순위·원인·조치 해석은 AI가</span>
             <div id="out-briefing" style="margin-top:14px"></div>
+          </section>
+
+          <!-- 알림 그룹핑 -->
+          <section class="view" id="view-alarmgroup">
+            <div class="card"><div class="card-body">
+              <div class="controls">
+                <button class="btn" onclick="runAlarmGroup(true)">부하 시나리오로 보기</button>
+                <button class="btn ghost" onclick="runAlarmGroup(false)">현재 알림으로</button>
+                <span class="demo">여러 지표 알림 → AI가 '한 사건'으로 묶음 (탐지·원본은 그대로 보존)</span>
+              </div>
+              <div class="hint">한 사건인데 CPU·CPU Core·CPU User가 각각 떠서 알림이 여러 건 되는 상황을, 사건 단위로 접어 보여줍니다.</div>
+            </div></div>
+            <div id="out-alarmgroup" style="margin-top:14px"></div>
           </section>
 
           <!-- 원인 추적 -->
@@ -342,7 +366,7 @@
     <div class="toast" id="toast"></div>
 
     <script>
-      const TABS = ["briefing","rootcause","note","tuning","report","query","diagnose","threshold"];
+      const TABS = ["briefing","alarmgroup","rootcause","note","tuning","report","query","diagnose","threshold"];
       const esc = (s) => String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       const lvClass = (l) => "lv lv-" + (l || "정상");
 
@@ -423,6 +447,41 @@
           </div>`;
         } catch (e) { out.innerHTML = fail("브리핑 생성 중 오류가 발생했습니다."); }
         btn.disabled = false;
+      }
+
+      // ---------- 알림 그룹핑 ----------
+      async function runAlarmGroup(demo) {
+        const out = document.getElementById("out-alarmgroup");
+        out.innerHTML = '<div class="loading">AI가 알림을 사건 단위로 묶는 중입니다…</div>';
+        try {
+          const d = await (await fetch("/api/ai/alarm-group", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demo }) })).json();
+          if (!d.ok) { out.innerHTML = fail(d.reply); return; }
+          const alarms = d.alarms || [];
+          const events = (d.result && d.result.events) || [];
+          if (!alarms.length) {
+            out.innerHTML = '<div class="ai-card">현재 주의·위험 상태인 알림이 없습니다. "부하 시나리오로 보기"를 눌러 데모를 확인하세요.</div>';
+            return;
+          }
+          const rawList = alarms.map((a) =>
+            `<div class="algrp-raw"><span class="${lvClass(a.level)}">${esc(a.level)}</span> <b>${esc(a.server)}</b> · ${esc(a.metric)} <span class="mono">(${esc(a.value)})</span></div>`
+          ).join("");
+          const evList = events.length ? events.map((e) =>
+            `<div class="prio">
+              <div class="prio-head"><span class="${lvClass(e.level)}">${esc(e.level)}</span><span class="srv">${esc(e.title)}</span><span class="demo">관련 ${esc(e.count || (e.members ? e.members.length : 0))}건</span></div>
+              <div class="prio-grid">
+                <span class="k">묶인 알림</span><span class="v">${(e.members || []).map(esc).join(" · ")}</span>
+                <span class="k">원인 추정</span><span class="v">${esc(e.cause)}</span>
+                <span class="k">권장 조치</span><span class="v">${esc(e.action)}</span>
+              </div>
+            </div>`
+          ).join("") : '<div class="demo">묶을 사건이 없습니다.</div>';
+          out.innerHTML = `<div class="algrp">
+            <div><div class="algrp-h">원본 알림 ${alarms.length}건${d.source === "demo" ? " · 부하 시나리오" : ""}</div>${rawList}</div>
+            <div class="algrp-arrow">→</div>
+            <div><div class="algrp-h">AI 묶음 ${events.length}건</div>${evList}</div>
+          </div>
+          <p class="hint">AiWACS 원본 ${alarms.length}건은 그대로 두고, 관제자에게는 ${events.length}개 사건으로 접어 보여줍니다.</p>`;
+        } catch (e) { out.innerHTML = fail("알림 그룹핑 중 오류가 발생했습니다."); }
       }
 
       // ---------- 원인 추적 ----------

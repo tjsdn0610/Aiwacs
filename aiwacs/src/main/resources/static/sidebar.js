@@ -12,6 +12,7 @@
       label: "AI 운영 도우미",
       children: [
         { label: "운영 브리핑", href: "/ai#briefing" },
+        { label: "알림 그룹핑", href: "/ai#alarmgroup" },
         { label: "원인 추적", href: "/ai#rootcause" },
         { label: "처리내역 초안", href: "/ai#note" },
         { label: "정책 튜닝", href: "/ai#tuning" },

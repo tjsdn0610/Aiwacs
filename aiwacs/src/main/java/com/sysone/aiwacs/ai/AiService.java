@@ -695,6 +695,102 @@ public class AiService {
         return Map.of("ok", true, "result", result);
     }
 
+    // ===== AI 알림 그룹핑 (여러 지표 알림을 '하나의 사건'으로 묶고 조합을 해석) =====
+    // 관찰: CPU 하나가 올라도 CPU / CPU Core / CPU User 가 각각 임계를 넘어 알림이 여러 건 뜬다.
+    // AiWACS의 탐지·판정은 그대로 두고(원본 알림 보존), AI는 관제자에게 '사건 단위'로 접어 보여준다.
+    private static final Map<String, String> METRIC_KR2 = Map.of("cpu", "CPU", "memory", "메모리", "disk", "디스크");
+
+    /** demo=true면 우리가 부하 실험에서 실제로 본 알림 세트를, false면 현재 판정 기반 실알림을 묶는다. */
+    public Map<String, Object> groupAlarms(boolean demo) {
+        if (!gemini.isConfigured()) {
+            return Map.of("ok", false, "reply", NOT_CONFIGURED);
+        }
+        List<Map<String, Object>> alarms = demo ? demoAlarms() : currentAlarms();
+        String source = demo ? "demo" : "current";
+        if (alarms.isEmpty()) {
+            return Map.of("ok", true, "source", source, "rawCount", 0,
+                    "alarms", alarms, "result", Map.of("events", List.of()));
+        }
+
+        String prompt = """
+                당신은 관제(NOC) 도우미입니다. 아래 '발생 알림'들을 관제자가 보기 쉽게 '사건(event)' 단위로 묶으세요.
+                AiWACS의 알림 자체는 정확합니다. 당신은 탐지를 바꾸지 말고, 여러 줄을 하나로 묶어 원인만 해석합니다.
+
+                [묶는 규칙]
+                - 같은 서버에서 같은 자원군(예: CPU 계열: CPU/CPU Core/CPU User)의 알림은 '한 사건'으로 묶으세요.
+                - 자원이 다르면(CPU vs 메모리 vs 디스크) 다른 사건입니다.
+                - 어떤 세부 지표 조합이 떴는지로 원인 유형을 추정하세요:
+                  · User·Core·전체가 함께 → 전 코어 계산 부하
+                  · Core만 높고 전체는 낮음 → 단일 스레드 병목 가능성
+                  · Wait만 높음 → CPU가 아니라 디스크/IO 대기 가능성
+                  · System만 높음 → 커널/네트워크/컨텍스트 스위치 폭주 가능성
+                - 원인은 단정하지 말고 "가능성"으로. 반드시 JSON만 답하세요.
+
+                [출력 형식]
+                {"events": [{"title": "사건 요약(예: server1 CPU 포화)", "server": "서버", "level": "주의|경고|위험", "count": 묶은 알림 수, "members": ["원본 알림 요약1", "원본 알림 요약2"], "cause": "조합으로 본 원인 추정", "action": "권장 조치"}]}
+
+                [발생 알림]
+                %s""".formatted(gemini.toJson(alarms));
+
+        JsonNode result;
+        try {
+            result = gemini.extractJson(gemini.generate(prompt), false);
+        } catch (GeminiClient.AiBusyException e) {
+            return Map.of("ok", false, "reply", AI_BUSY);
+        } catch (Exception e) {
+            return Map.of("ok", false, "reply", "알림 그룹핑 실패: " + shortError(e));
+        }
+        return Map.of("ok", true, "source", source, "rawCount", alarms.size(),
+                "alarms", alarms, "result", result);
+    }
+
+    /** 현재 판정 기준으로 주의·위험인 서버·지표를 알림 목록으로 (클론의 실데이터) */
+    private List<Map<String, Object>> currentAlarms() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (MonitoredServer s : servers.findAll()) {
+            if (!servers.isOnline(s.getId())) {
+                continue;
+            }
+            Map<String, Map<String, Object>> judged = servers.judge(s.getId()).orElse(null);
+            if (judged == null) {
+                continue;
+            }
+            judged.forEach((metric, m) -> {
+                String status = String.valueOf(m.get("status"));
+                if (!"정상".equals(status)) {
+                    Map<String, Object> a = new LinkedHashMap<>();
+                    a.put("server", s.label());
+                    a.put("company", s.getCompany());
+                    a.put("metric", METRIC_KR2.getOrDefault(metric, metric));
+                    a.put("level", status);
+                    a.put("value", m.get("value"));
+                    out.add(a);
+                }
+            });
+        }
+        return out;
+    }
+
+    /** 부하 실험에서 실제로 관찰한 알림 세트 (CPU 한 사건이 세 지표로 분리되어 뜬 상황) */
+    private List<Map<String, Object>> demoAlarms() {
+        return List.of(
+                alarm("server1", "테라넷", "CPU (Core) >= 40%", "경고", 100),
+                alarm("server1", "테라넷", "CPU User >= 40%", "경고", 98),
+                alarm("server1", "테라넷", "CPU User (Core) >= 40%", "경고", 99),
+                alarm("server1", "테라넷", "메모리 사용률 >= 80%", "주의", 82),
+                alarm("server2", "ABC", "디스크 사용률 >= 80%", "주의", 88));
+    }
+
+    private static Map<String, Object> alarm(String server, String company, String metric, String level, int value) {
+        Map<String, Object> a = new LinkedHashMap<>();
+        a.put("server", server);
+        a.put("company", company);
+        a.put("metric", metric);
+        a.put("level", level);
+        a.put("value", value);
+        return a;
+    }
+
     private static String shortError(Exception e) {
         String msg = String.valueOf(e.getMessage());
         return e.getClass().getSimpleName() + ": " + msg.substring(0, Math.min(200, msg.length()));
