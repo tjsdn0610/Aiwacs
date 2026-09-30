@@ -21,7 +21,9 @@
 - **백엔드**: Java 25 + Spring Boot 4.1.1 (Maven Wrapper `./mvnw`, Jackson 3 = `tools.jackson` 패키지)
 - **프론트엔드**: HTML + CSS + JavaScript (Vanilla)
 - **시스템 지표 수집**: OSHI 7.6.1 — **Agent(`aiwacs-agent/`)에서만** 사용. 본체는 직접 측정하지 않음
-- **AI**: Google Gemini REST API (모델: `gemini-3.6-flash`, Spring RestClient로 호출)
+- **AI**: 로컬 LLM — Ollama (모델: `gemma3:4b`, `http://localhost:11434/api/chat`, Spring RestClient로 호출). 보안상 지표가 외부로 나가지 않게 전환
+  - 이전 방식 Google Gemini REST API(`GeminiClient`)는 코드를 남겨두고 `@Component`·설정만 주석 처리 (되돌릴 때 주석 해제)
+  - Ollama 설치: `brew install ollama && brew services start ollama && ollama pull gemma3:4b`
 - **DB**: PostgreSQL 17 (회사 스택, Docker로 실행). 테이블: `alert_policy`(정책), `monitored_server`(서버), `metric_history`(1분 평균 지표 이력)
 - **API 키**: `aiwacs/.env` (gitignore) → `spring.config.import`로 읽음
 - **개발 도구**: VSCode (자바 확장) + 저(Claude)와 바이브 코딩
@@ -42,7 +44,7 @@ src/main/java/com/sysone/aiwacs/
 ├── monitor/  MonitorController(/api/status·procs·disk·traffic ?serverId=)
 ├── history/  MetricHistory(엔티티), MetricHistoryService(1분 평균 저장·7일 보관), MetricHistoryController(/api/history?date=, /api/history/days, /api/history/recent)
 ├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·서버별 정책 결정·임계치 변경), PolicyController(/api/policies)
-├── ai/       GeminiClient(호출·JSON 추출·재시도), AiService(프롬프트), AiController(/api/ai/*)
+├── ai/       AiClient(공통: JSON 추출·예외), OllamaClient(로컬 LLM, 사용 중), GeminiClient(사용 안 함), AiService(프롬프트), AiController(/api/ai/*)
 └── config/   WebConfig (/policy, /ai, /servers 화면 주소 연결)
 src/main/resources/static/  index.html, servers.html, policy.html, ai.html, sidebar.js(모든 화면 공통 사이드바 메뉴)
 docker-compose.yml           PostgreSQL (볼륨 이름 `aiwacs-pgdata`로 고정)
@@ -108,7 +110,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - [x] 지표 이력 저장 (1분 평균, 7일 보관 `history.retention-days`) → Resource Map 날짜별 하루 그래프
 - [ ] AI 조치 실행 (프로세스 끄기/재시작 등) — 예정
 - [ ] Agent 자동 실행(systemd 서비스), Agent 로그 영어화(VM 콘솔 한글 깨짐) — 예정
-- [ ] 로컬 LLM으로도 동작해 보기 — 예정 (현재 Gemini). AI 호출은 `GeminiClient` 한 곳에 모여 있어 교체 지점이 명확함
+- [x] 로컬 LLM(Ollama)으로 전환 — AI 호출은 `AiClient` 뒤에 숨겨져 있어 `@Component`만 바꾸면 Gemini와 교체 가능
 
 ### 세부 지표 (진단 정확도용, Agent가 OSHI로 수집)
 - CPU: 사용률, 코어수, Load Average, Context Switch
