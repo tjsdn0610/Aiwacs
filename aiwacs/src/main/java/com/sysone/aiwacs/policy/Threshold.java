@@ -2,27 +2,77 @@ package com.sysone.aiwacs.policy;
 
 import jakarta.persistence.Embeddable;
 
-/** 한 지표의 임계치 한 쌍 (주의 / 위험). JSON으로는 {"warn": 70, "danger": 90} 형태. */
+/**
+ * 한 지표의 알림 레벨 임계치 (AiWACS와 같은 4단계: 주의 / 경고 / 위험 / 장애).
+ * JSON으로는 {"caution": 70, "warning": 80, "danger": 90, "critical": 95} 형태.
+ */
 @Embeddable
 public class Threshold {
 
-    private Integer warn;
-    private Integer danger;
+    private Integer caution;   // 주의
+    private Integer warning;   // 경고
+    private Integer danger;    // 위험
+    private Integer critical;  // 장애
 
     public Threshold() {
     }
 
-    public Threshold(Integer warn, Integer danger) {
-        this.warn = warn;
+    public Threshold(Integer caution, Integer warning, Integer danger, Integer critical) {
+        this.caution = caution;
+        this.warning = warning;
         this.danger = danger;
+        this.critical = critical;
     }
 
-    public Integer getWarn() {
-        return warn;
+    /** 레벨 키(caution/warning/danger/critical)로 값 조회 */
+    public Integer get(String level) {
+        return switch (level) {
+            case "caution" -> caution;
+            case "warning" -> warning;
+            case "danger" -> danger;
+            case "critical" -> critical;
+            default -> null;
+        };
     }
 
-    public void setWarn(Integer warn) {
-        this.warn = warn;
+    /** 한 레벨만 바꾼 새 임계치 (Embeddable은 새 객체로 교체해야 변경이 확실히 반영된다) */
+    public Threshold with(String level, int value) {
+        return new Threshold(
+                "caution".equals(level) ? value : caution,
+                "warning".equals(level) ? value : warning,
+                "danger".equals(level) ? value : danger,
+                "critical".equals(level) ? value : critical);
+    }
+
+    /** 주의 ≤ 경고 ≤ 위험 ≤ 장애 순서인지 (비어 있는 레벨은 건너뜀) */
+    public boolean isOrdered() {
+        Integer prev = null;
+        for (Integer v : new Integer[] {caution, warning, danger, critical}) {
+            if (v == null) {
+                continue;
+            }
+            if (prev != null && v < prev) {
+                return false;
+            }
+            prev = v;
+        }
+        return true;
+    }
+
+    public Integer getCaution() {
+        return caution;
+    }
+
+    public void setCaution(Integer caution) {
+        this.caution = caution;
+    }
+
+    public Integer getWarning() {
+        return warning;
+    }
+
+    public void setWarning(Integer warning) {
+        this.warning = warning;
     }
 
     public Integer getDanger() {
@@ -31,5 +81,13 @@ public class Threshold {
 
     public void setDanger(Integer danger) {
         this.danger = danger;
+    }
+
+    public Integer getCritical() {
+        return critical;
+    }
+
+    public void setCritical(Integer critical) {
+        this.critical = critical;
     }
 }

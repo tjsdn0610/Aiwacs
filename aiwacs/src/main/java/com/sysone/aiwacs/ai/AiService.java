@@ -62,14 +62,14 @@ public class AiService {
 
                 형식 (항상 배열로 답해라. 변경이 하나여도 배열 안에 하나 넣어라):
                 [
-                  {"company": "기업명", "policy": "정책명", "metric": "cpu|memory|disk", "level": "warn|danger", "value": 숫자}
+                  {"company": "기업명", "policy": "정책명", "metric": "cpu|memory|disk", "level": "caution|warning|danger|critical", "value": 숫자}
                 ]
 
                 규칙:
                 - 사용자가 여러 항목을 한 번에 바꾸라고 하면, 각각을 배열의 원소로 만들어라
                 - company/policy: 위 목록에서 가장 일치하는 것을 골라라 (오타나 구어체도 최대한 매칭)
                 - metric: CPU는 "cpu", 메모리는 "memory", 디스크는 "disk"
-                - level: 주의/경고는 "warn", 위험/심각은 "danger"
+                - level: 주의는 "caution", 경고는 "warning", 위험은 "danger", 장애(심각/크리티컬)는 "critical"
                 - value: 퍼센트 숫자만 (0~100)
                 - 명령을 전혀 이해할 수 없으면 [{"error": "이해할 수 없는 명령입니다"}]
 
@@ -199,7 +199,7 @@ public class AiService {
                   예시: 메모리 부족 → 캐시(cached) 감소 → 페이지폴트 증가 → 디스크 I/O 증가 → 응답 저하
                   예시: Load Average가 코어 수보다 큼 → CPU 처리 대기 → 특정 프로세스 병목
                   예시: Swap 사용 시작 → 물리 메모리 고갈 신호 → 성능 급저하 위험
-                - 상태 판정(정상/주의/위험)은 이미 시스템이 내렸습니다. 바꾸지 말고 해석만 하세요.
+                - 상태 판정(정상/주의/경고/위험/장애)은 이미 시스템이 내렸습니다. 바꾸지 말고 해석만 하세요.
                 - 원인을 단정하지 마세요. "~일 가능성이 있습니다", "~로 보입니다" 형태로만.
                 - 프로세스 목록을 참고해 어떤 프로세스가 원인일 가능성이 있는지 짚으세요.
                 - 페이지폴트·스왑·디스크 I/O 값이 인과관계를 뒷받침하는지 확인하고, 근거가 된 수치를 함께 언급하세요.
@@ -209,7 +209,7 @@ public class AiService {
                 - 반드시 아래 JSON 형식으로만 답하세요. 다른 말 금지.
 
                 [출력 형식]
-                {"level": "정상|주의|위험", "summary": "지금 무슨 일이 일어나는지 쉬운 말로 1~2문장", "correlation": "지표들이 어떻게 서로 영향을 주는지 인과관계를 화살표(→)로 표현하고 쉽게 설명", "causes": ["가능성 있는 원인1", "원인2"], "check": "직접 확인해볼 방법을 쉽게", "action": "권장 조치를 단계별로 쉽게"}
+                {"level": "정상|주의|경고|위험|장애", "summary": "지금 무슨 일이 일어나는지 쉬운 말로 1~2문장", "correlation": "지표들이 어떻게 서로 영향을 주는지 인과관계를 화살표(→)로 표현하고 쉽게 설명", "causes": ["가능성 있는 원인1", "원인2"], "check": "직접 확인해볼 방법을 쉽게", "action": "권장 조치를 단계별로 쉽게"}
 
                 [서버 정보]
                 %s
@@ -293,7 +293,7 @@ public class AiService {
                 - 원인은 단정하지 말고 "가능성"으로. 반드시 JSON만 답하세요.
 
                 [출력 형식]
-                {"events": [{"title": "사건 요약(예: server1 CPU 포화)", "server": "서버", "level": "주의|경고|위험", "count": 묶은 알림 수, "members": ["원본 알림 요약1", "원본 알림 요약2"], "cause": "조합으로 본 원인 추정", "action": "권장 조치"}]}
+                {"events": [{"title": "사건 요약(예: server1 CPU 포화)", "server": "서버", "level": "주의|경고|위험|장애 (묶인 알림 중 가장 높은 레벨)", "count": 묶은 알림 수, "members": ["원본 알림 요약1", "원본 알림 요약2"], "cause": "조합으로 본 원인 추정", "action": "권장 조치"}]}
 
                 [발생 알림]
                 %s""".formatted(ai.toJson(alarms));

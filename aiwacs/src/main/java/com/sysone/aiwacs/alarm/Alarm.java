@@ -25,7 +25,7 @@ public class Alarm {
     private final String company;
     private final String resource;  // 그룹핑 기준: cpu / memory / disk
     private final String metric;    // 표시 지표: CPU / CPU Core / CPU User / 메모리 / 디스크
-    private String level;           // 주의 / 위험
+    private String level;           // 주의 / 경고 / 위험 / 장애 (레벨이 오르내리면 이 알람 한 건이 갱신됨)
     private double value;
     private final Instant firstAt;
     private Instant lastAt;

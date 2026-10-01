@@ -210,38 +210,59 @@
         font-size: 14px;
         margin-bottom: 10px;
       }
-      .th-row {
-        display: flex;
-        gap: 24px;
-        padding-left: 8px;
+      /* 알림 레벨 표 (AiWACS 정책 화면처럼 주의/경고/위험/장애 색 머리글 + 아래 입력칸) */
+      .lv-table {
+        border-collapse: collapse;
+        margin-left: 8px;
       }
-      .th-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+      .lv-table th {
+        width: 78px;
+        padding: 4px 0;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
       }
-      .th-item .dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
+      .lv-table td {
+        padding: 4px 3px;
+        text-align: center;
       }
-      .th-item .dot.warn {
-        background: #e0a020;
-      }
-      .th-item .dot.danger {
-        background: #d64545;
-      }
-      .th-item input {
-        width: 70px;
-        padding: 6px 8px;
+      .lv-table input {
+        width: 64px;
+        padding: 6px 4px;
         border: 1px solid #d5d9e2;
         border-radius: 4px;
         text-align: center;
         font-size: 13px;
       }
-      .th-item .unit {
+      .lv-table input.bad {
+        border-color: #ee3f3a;
+        background: #fff4f4;
+      }
+      .lv-h-caution { background: #f9b300; }
+      .lv-h-warning { background: #f59a23; }
+      .lv-h-danger { background: #f5652d; }
+      .lv-h-critical { background: #ee3f3a; }
+      .lv-hint {
+        margin: 6px 0 0 8px;
+        font-size: 12px;
         color: #9098aa;
       }
+      .lv-hint.bad {
+        color: #ee3f3a;
+      }
+      /* 목록의 레벨별 값 (색으로 레벨 구분) */
+      .lv-vals span {
+        display: inline-block;
+        min-width: 26px;
+        text-align: center;
+        font-weight: 600;
+      }
+      .lv-vals .v-caution { color: #c98f00; }
+      .lv-vals .v-warning { color: #d97a0a; }
+      .lv-vals .v-danger { color: #e0501c; }
+      .lv-vals .v-critical { color: #d42c27; }
+      .lv-vals .sep { min-width: 6px; color: #c5cad6; font-weight: 400; }
       .modal-foot {
         padding: 16px 22px;
         border-top: 1px solid #eef0f4;
@@ -286,9 +307,9 @@
               <tr>
                 <th>고객사</th>
                 <th>정책 명</th>
-                <th>CPU (주의/위험)</th>
-                <th>메모리 (주의/위험)</th>
-                <th>디스크 (주의/위험)</th>
+                <th>CPU (주의/경고/위험/장애)</th>
+                <th>메모리 (주의/경고/위험/장애)</th>
+                <th>디스크 (주의/경고/위험/장애)</th>
                 <th>수정일자</th>
                 <th style="width: 120px">관리</th>
               </tr>
@@ -320,63 +341,8 @@
             <label>정책 명</label>
             <input type="text" id="f-name" placeholder="예: DB서버 정책" />
           </div>
-          <div class="metric-block">
-            <div class="metric-head">CPU (%)</div>
-            <div class="th-row">
-              <div class="th-item">
-                <span class="dot warn"></span><label>주의</label
-                ><input type="number" id="cpu-warn" value="70" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-              <div class="th-item">
-                <span class="dot danger"></span><label>위험</label
-                ><input type="number" id="cpu-danger" value="90" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-            </div>
-          </div>
-          <div class="metric-block">
-            <div class="metric-head">Memory (%)</div>
-            <div class="th-row">
-              <div class="th-item">
-                <span class="dot warn"></span><label>주의</label
-                ><input type="number" id="memory-warn" value="80" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-              <div class="th-item">
-                <span class="dot danger"></span><label>위험</label
-                ><input type="number" id="memory-danger" value="90" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-            </div>
-          </div>
-          <div class="metric-block">
-            <div class="metric-head">Disk (%)</div>
-            <div class="th-row">
-              <div class="th-item">
-                <span class="dot warn"></span><label>주의</label
-                ><input type="number" id="disk-warn" value="80" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-              <div class="th-item">
-                <span class="dot danger"></span><label>위험</label
-                ><input type="number" id="disk-danger" value="95" /><span
-                  class="unit"
-                  >%</span
-                >
-              </div>
-            </div>
-          </div>
+          <!-- CPU / Memory / Disk 레벨 입력 표는 아래 스크립트(renderLevelBlocks)가 채운다 -->
+          <div id="level-blocks"></div>
         </div>
         <div class="modal-foot">
           <button class="btn btn-primary" onclick="savePolicy()">저장</button>
@@ -387,6 +353,88 @@
     <div class="toast" id="toast"></div>
 
     <script>
+      // AiWACS와 같은 알림 레벨 4단계 (낮은 → 높은 순)
+      const LEVELS = [
+        { key: "caution", label: "주의" },
+        { key: "warning", label: "경고" },
+        { key: "danger", label: "위험" },
+        { key: "critical", label: "장애" },
+      ];
+      const METRICS = [
+        { key: "cpu", label: "CPU (%)" },
+        { key: "memory", label: "Memory (%)" },
+        { key: "disk", label: "Disk (%)" },
+      ];
+      // 새 정책 기본값 (PolicyService의 기본값과 같음)
+      const DEFAULTS = {
+        cpu: { caution: 70, warning: 80, danger: 90, critical: 95 },
+        memory: { caution: 80, warning: 85, danger: 90, critical: 95 },
+        disk: { caution: 80, warning: 90, danger: 95, critical: 98 },
+      };
+
+      function renderLevelBlocks() {
+        document.getElementById("level-blocks").innerHTML = METRICS.map(
+          (m) => `
+          <div class="metric-block">
+            <div class="metric-head">${m.label}</div>
+            <table class="lv-table">
+              <tr>${LEVELS.map((l) => `<th class="lv-h-${l.key}">${l.label}</th>`).join("")}</tr>
+              <tr>${LEVELS.map((l) => `<td><input type="number" min="0" max="100" id="${m.key}-${l.key}" oninput="checkOrder('${m.key}')" /></td>`).join("")}</tr>
+            </table>
+            <div class="lv-hint" id="${m.key}-hint">주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 입력합니다.</div>
+          </div>`,
+        ).join("");
+      }
+      renderLevelBlocks();
+
+      function fillLevels(th) {
+        for (const m of METRICS) {
+          for (const l of LEVELS) {
+            const v = th[m.key] ? th[m.key][l.key] : null;
+            document.getElementById(`${m.key}-${l.key}`).value = v ?? "";
+          }
+          checkOrder(m.key);
+        }
+      }
+
+      function readLevels(metric) {
+        const out = {};
+        for (const l of LEVELS) {
+          const raw = document.getElementById(`${metric}-${l.key}`).value;
+          out[l.key] = raw === "" ? null : +raw;
+        }
+        return out;
+      }
+
+      /** 0~100 범위 + 주의 ≤ 경고 ≤ 위험 ≤ 장애 순서인지 확인하고 표시 (판정 순서가 꼬이지 않게) */
+      function checkOrder(metric) {
+        const vals = readLevels(metric);
+        let prev = null;
+        let ok = true;
+        for (const l of LEVELS) {
+          const v = vals[l.key];
+          const bad = v === null || v < 0 || v > 100 || (prev !== null && v < prev);
+          document.getElementById(`${metric}-${l.key}`).classList.toggle("bad", bad);
+          if (bad) ok = false;
+          if (v !== null) prev = prev === null ? v : Math.max(prev, v);
+        }
+        const hint = document.getElementById(`${metric}-hint`);
+        hint.classList.toggle("bad", !ok);
+        hint.textContent = ok
+          ? "주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 입력합니다."
+          : "0~100 사이 값을 주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 입력해 주세요.";
+        return ok;
+      }
+
+      function levelCell(th) {
+        if (!th) return "-";
+        return (
+          '<span class="lv-vals">' +
+          LEVELS.map((l) => `<span class="v-${l.key}">${th[l.key] ?? "-"}</span>`).join('<span class="sep">/</span>') +
+          "%</span>"
+        );
+      }
+
       async function loadList() {
         const res = await fetch("/api/policies");
         const data = await res.json();
@@ -402,9 +450,9 @@
       <tr>
         <td><span class="company-tag">${p.company}</span></td>
         <td>${p.name}</td>
-        <td>${p.cpu.warn}% / ${p.cpu.danger}%</td>
-        <td>${p.memory.warn}% / ${p.memory.danger}%</td>
-        <td>${p.disk.warn}% / ${p.disk.danger}%</td>
+        <td>${levelCell(p.cpu)}</td>
+        <td>${levelCell(p.memory)}</td>
+        <td>${levelCell(p.disk)}</td>
         <td style="color:#7a8194;white-space:nowrap;">${p.updatedAt || "-"}</td>
         <td>
           <span class="link" onclick='openEdit(${JSON.stringify(p)})'>수정</span> &nbsp;
@@ -420,12 +468,7 @@
         document.getElementById("edit-id").value = "";
         document.getElementById("f-company").value = "";
         document.getElementById("f-name").value = "";
-        document.getElementById("cpu-warn").value = 70;
-        document.getElementById("cpu-danger").value = 90;
-        document.getElementById("memory-warn").value = 80;
-        document.getElementById("memory-danger").value = 90;
-        document.getElementById("disk-warn").value = 80;
-        document.getElementById("disk-danger").value = 95;
+        fillLevels(DEFAULTS);
         document.getElementById("modal").classList.add("show");
       }
 
@@ -434,12 +477,7 @@
         document.getElementById("edit-id").value = p.id;
         document.getElementById("f-company").value = p.company;
         document.getElementById("f-name").value = p.name;
-        document.getElementById("cpu-warn").value = p.cpu.warn;
-        document.getElementById("cpu-danger").value = p.cpu.danger;
-        document.getElementById("memory-warn").value = p.memory.warn;
-        document.getElementById("memory-danger").value = p.memory.danger;
-        document.getElementById("disk-warn").value = p.disk.warn;
-        document.getElementById("disk-danger").value = p.disk.danger;
+        fillLevels(p);
         document.getElementById("modal").classList.add("show");
       }
 
@@ -449,21 +487,18 @@
 
       async function savePolicy() {
         const id = document.getElementById("edit-id").value;
+        // 세 지표를 모두 검사해 표시까지 한 뒤 하나라도 틀리면 저장하지 않음
+        const allOk = METRICS.map((m) => checkOrder(m.key)).every(Boolean);
+        if (!allOk) {
+          showToast("레벨 값 순서를 확인해 주세요 (주의 ≤ 경고 ≤ 위험 ≤ 장애)");
+          return;
+        }
         const body = {
           company: document.getElementById("f-company").value || "미지정",
           name: document.getElementById("f-name").value || "새 정책",
-          cpu: {
-            warn: +document.getElementById("cpu-warn").value,
-            danger: +document.getElementById("cpu-danger").value,
-          },
-          memory: {
-            warn: +document.getElementById("memory-warn").value,
-            danger: +document.getElementById("memory-danger").value,
-          },
-          disk: {
-            warn: +document.getElementById("disk-warn").value,
-            danger: +document.getElementById("disk-danger").value,
-          },
+          cpu: readLevels("cpu"),
+          memory: readLevels("memory"),
+          disk: readLevels("disk"),
         };
         if (id) {
           await fetch("/api/policies/" + id, {

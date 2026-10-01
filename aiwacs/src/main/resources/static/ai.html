@@ -311,12 +311,20 @@
         color: #2e9e52;
       }
       .st-주의 {
-        background: #fbefd6;
-        color: #b0791a;
+        background: #fbf1da;
+        color: #c9820a;
+      }
+      .st-경고 {
+        background: #fbe6d6;
+        color: #c9600a;
       }
       .st-위험 {
-        background: #fbeeee;
+        background: #fbe9e9;
         color: #d64545;
+      }
+      .st-장애 {
+        background: #f6d7d7;
+        color: #a02020;
       }
       .diag-card {
         background: #f8f9fc;
@@ -520,12 +528,9 @@
 
           // AI 진단 카드
           const d = data.diagnosis;
-          const levelColor =
-            d.level === "위험"
-              ? "st-위험"
-              : d.level === "주의"
-                ? "st-주의"
-                : "st-정상";
+          const levelColor = ["주의", "경고", "위험", "장애"].includes(d.level)
+            ? "st-" + d.level
+            : "st-정상";
           const causes = Array.isArray(d.causes)
             ? d.causes.map((c) => `<li>${c}</li>`).join("")
             : "";
@@ -574,6 +579,12 @@
         }
       }
 
+      // 주의/경고/위험/장애 임계치를 "70/80/90/95" 형태로
+      function lvVals(th) {
+        if (!th) return "-";
+        return ["caution", "warning", "danger", "critical"].map((k) => th[k] ?? "-").join("/");
+      }
+
       async function loadPolicies() {
         const res = await fetch("/api/policies");
         const data = await res.json();
@@ -582,7 +593,7 @@
             (p) => `
       <div class="pol-item">
         <span class="company-tag">${p.company}</span>${p.name}
-        <span class="vals"> · CPU ${p.cpu.warn}/${p.cpu.danger} · 메모리 ${p.memory.warn}/${p.memory.danger} · 디스크 ${p.disk.warn}/${p.disk.danger}</span>
+        <span class="vals"> · CPU ${lvVals(p.cpu)} · 메모리 ${lvVals(p.memory)} · 디스크 ${lvVals(p.disk)}</span>
       </div>`,
           )
           .join("");

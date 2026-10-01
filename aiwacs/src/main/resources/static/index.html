@@ -454,14 +454,7 @@
         background: #e8f6ee;
         color: #2e9e52;
       }
-      .lv-주의 {
-        background: #fdf4e3;
-        color: #e0a020;
-      }
-      .lv-위험 {
-        background: #fbeaea;
-        color: #d64545;
-      }
+      /* 주의/경고/위험/장애 색은 위 알림 배지(.lv-주의 ~ .lv-장애)와 같은 것을 씀 */
       .lv-오프라인 {
         background: #f0f1f4;
         color: #7a8194;
@@ -575,7 +568,7 @@
                 </div>
                 <div class="status-box">
                   <div class="label">장애</div>
-                  <div class="num n-fault">0</div>
+                  <div class="num n-fault" id="s-critical">0</div>
                 </div>
                 <div class="status-box">
                   <div class="label">다운</div>
@@ -615,9 +608,9 @@
                 <tr>
                   <td>미지정</td>
                   <td id="g-caution">0</td>
-                  <td>0</td>
+                  <td id="g-warn">0</td>
                   <td id="g-danger">0</td>
-                  <td>0</td>
+                  <td id="g-critical">0</td>
                 </tr>
               </table>
             </div>
@@ -804,8 +797,11 @@
       // 장비 현황: 서버별 대표 상태(가장 심각한 지표)를 집계
       function updateCounts(list) {
         const online = list.filter((s) => s.online);
-        const caution = online.filter((s) => s.level === "주의").length;
-        const danger = online.filter((s) => s.level === "위험").length;
+        const count = (lv) => online.filter((s) => s.level === lv).length;
+        const caution = count("주의");
+        const warn = count("경고");
+        const danger = count("위험");
+        const critical = count("장애");
         const os = (s) => (s.os || "").toLowerCase();
         const isLinux = (s) =>
           /linux|rocky|ubuntu|centos|red hat|debian|fedora/.test(os(s));
@@ -814,10 +810,14 @@
         const set = (id, v) => (document.getElementById(id).textContent = v);
         set("s-total", list.length);
         set("s-caution", caution);
+        set("s-warn", warn);
         set("s-danger", danger);
+        set("s-critical", critical);
         set("s-down", list.length - online.length);
         set("g-caution", caution);
+        set("g-warn", warn);
         set("g-danger", danger);
+        set("g-critical", critical);
         set("os-linux", list.filter(isLinux).length);
         set("os-windows", list.filter(isWindows).length);
         set("os-unix", list.filter(isUnix).length);

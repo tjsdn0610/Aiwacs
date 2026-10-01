@@ -18,9 +18,10 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 /**
- * 알림 정책 (고객사 + 정책명 + CPU/메모리/디스크 임계치).
- * DB에는 한 줄(cpu_warn, cpu_danger, ...)로 저장되고,
- * JSON으로는 화면이 쓰기 편한 {"cpu": {"warn", "danger"}, ...} 형태로 나간다.
+ * 알림 정책 (고객사 + 정책명 + CPU/메모리/디스크 임계치, 레벨은 AiWACS와 같은 주의/경고/위험/장애 4단계).
+ * DB에는 한 줄(cpu_warn, cpu_warning, cpu_danger, cpu_critical, ...)로 저장되고,
+ * JSON으로는 화면이 쓰기 편한 {"cpu": {"caution", "warning", "danger", "critical"}, ...} 형태로 나간다.
+ * ※ 주의(caution)의 컬럼명이 *_warn인 것은 2단계(주의/위험) 시절 저장된 값을 그대로 이어 쓰기 위해서다.
  */
 @Entity
 @Table(name = "alert_policy")
@@ -38,22 +39,28 @@ public class Policy {
 
     @Embedded
     @AttributeOverrides({
-            @AttributeOverride(name = "warn", column = @Column(name = "cpu_warn")),
-            @AttributeOverride(name = "danger", column = @Column(name = "cpu_danger"))
+            @AttributeOverride(name = "caution", column = @Column(name = "cpu_warn")),
+            @AttributeOverride(name = "warning", column = @Column(name = "cpu_warning")),
+            @AttributeOverride(name = "danger", column = @Column(name = "cpu_danger")),
+            @AttributeOverride(name = "critical", column = @Column(name = "cpu_critical"))
     })
     private Threshold cpu;
 
     @Embedded
     @AttributeOverrides({
-            @AttributeOverride(name = "warn", column = @Column(name = "memory_warn")),
-            @AttributeOverride(name = "danger", column = @Column(name = "memory_danger"))
+            @AttributeOverride(name = "caution", column = @Column(name = "memory_warn")),
+            @AttributeOverride(name = "warning", column = @Column(name = "memory_warning")),
+            @AttributeOverride(name = "danger", column = @Column(name = "memory_danger")),
+            @AttributeOverride(name = "critical", column = @Column(name = "memory_critical"))
     })
     private Threshold memory;
 
     @Embedded
     @AttributeOverrides({
-            @AttributeOverride(name = "warn", column = @Column(name = "disk_warn")),
-            @AttributeOverride(name = "danger", column = @Column(name = "disk_danger"))
+            @AttributeOverride(name = "caution", column = @Column(name = "disk_warn")),
+            @AttributeOverride(name = "warning", column = @Column(name = "disk_warning")),
+            @AttributeOverride(name = "danger", column = @Column(name = "disk_danger")),
+            @AttributeOverride(name = "critical", column = @Column(name = "disk_critical"))
     })
     private Threshold disk;
 
