@@ -93,11 +93,11 @@
                 <thead>
                   <tr>
                     <th><input type="checkbox" id="chkAll" onclick="toggleAll(this)" /></th>
-                    <th>상태</th><th>장비</th><th>고객사</th><th>지표</th><th>레벨</th>
-                    <th>현재값</th><th>발생 시간</th><th>최종 발생</th><th>지속(초)</th><th>발생횟수</th>
+                    <th>상태</th><th>장비</th><th>고객사</th><th>설명</th><th>레벨</th>
+                    <th>현재값</th><th>발생 시간</th><th>최종 발생</th><th>해제 시간</th><th>지속(초)</th><th>발생횟수</th>
                   </tr>
                 </thead>
-                <tbody id="rows"><tr><td colspan="11" class="empty">불러오는 중…</td></tr></tbody>
+                <tbody id="rows"><tr><td colspan="12" class="empty">불러오는 중…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -122,22 +122,23 @@
           document.getElementById("total").textContent = list.length;
           document.getElementById("activeCnt").textContent = active;
           const tb = document.getElementById("rows");
-          if (!list.length) { tb.innerHTML = '<tr><td colspan="11" class="empty">발생한 알림이 없습니다. 서버에 부하가 걸리면 여기에 쌓입니다.</td></tr>'; return; }
+          if (!list.length) { tb.innerHTML = '<tr><td colspan="12" class="empty">발생한 알림이 없습니다. 서버에 부하가 걸리면 여기에 쌓입니다.</td></tr>'; return; }
           tb.innerHTML = list.map((a) => `<tr>
             <td>${a.status === "ACTIVE" ? `<input type="checkbox" class="rowchk" value="${a.id}" />` : ""}</td>
             <td><span class="st st-${a.status}">${stKr[a.status] || a.status}</span></td>
             <td class="dev">${esc(a.server)}</td>
             <td>${esc(a.company) || "-"}</td>
-            <td>${esc(a.metric)}</td>
+            <td>${esc(a.title || a.metric)}</td>
             <td><span class="${lvClass(a.level)}">${esc(a.level)}</span></td>
             <td class="mono">${esc(a.value)}</td>
             <td class="mono">${esc(a.firstAt)}</td>
             <td class="mono">${esc(a.lastAt)}</td>
+            <td class="mono">${esc(a.resolvedAt) || "-"}</td>
             <td class="mono">${esc(a.durationSec)}</td>
             <td class="mono">${esc(a.count)}</td>
           </tr>`).join("");
         } catch (e) {
-          document.getElementById("rows").innerHTML = '<tr><td colspan="11" class="empty">불러오지 못했습니다.</td></tr>';
+          document.getElementById("rows").innerHTML = '<tr><td colspan="12" class="empty">불러오지 못했습니다.</td></tr>';
         }
       }
       function toggleAll(el) { document.querySelectorAll(".rowchk").forEach((c) => (c.checked = el.checked)); }

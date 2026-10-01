@@ -266,50 +266,92 @@ public class AiService {
     // AiWACS의 탐지·판정은 그대로 두고(원본 알림 보존), AI는 관제자에게 '사건 단위'로 접어 보여준다.
     private static final Map<String, String> METRIC_KR2 = Map.of("cpu", "CPU", "memory", "메모리", "disk", "디스크");
 
-    /** demo=true면 부하 실험에서 실제로 본 알림 세트를, false면 현재 판정 기반 실알림을 묶는다. */
+    /**
+     * 현재 발생 알림을 사건 단위로 묶고 해석한다.
+     * - 어떤 알림끼리 한 사건인지는 코드(AlarmService.events)가 정한다: 같은 서버 + 같은 자원 → 한 사건.
+     *   (실측: CPU 한 번 오른 것이 CPU/CPU Core/CPU User × 주의·경고·장애로 불어나고, 발생 횟수·시각이 똑같았다)
+     * - AI는 묶인 사건마다 제목·원인·조치만 쓴다. AI가 실패해도 묶음 자체는 그대로 보여준다.
+     * (demo 인자는 예전 화면 호환용으로 남겨 두었고, 묶기는 항상 실제 발생 알림 기준)
+     */
     public Map<String, Object> groupAlarms(boolean demo) {
-        if (!ai.isConfigured()) {
-            return Map.of("ok", false, "reply", NOT_CONFIGURED);
-        }
-        List<Map<String, Object>> alarms = demo ? demoAlarms() : currentAlarms();
-        String source = demo ? "demo" : "current";
-        if (alarms.isEmpty()) {
-            return Map.of("ok", true, "source", source, "rawCount", 0,
+        List<Map<String, Object>> alarms = currentAlarms();
+        List<Map<String, Object>> events = alarmService.events();
+        if (events.isEmpty()) {
+            return Map.of("ok", true, "source", "current", "rawCount", 0,
                     "alarms", alarms, "result", Map.of("events", List.of()));
         }
 
-        String prompt = """
-                당신은 관제(NOC) 도우미입니다. 아래 '발생 알림'들을 관제자가 보기 쉽게 '사건(event)' 단위로 묶으세요.
-                AiWACS의 알림 자체는 정확합니다. 당신은 탐지를 바꾸지 말고, 여러 줄을 하나로 묶어 원인만 해석합니다.
+        // AI 해석 (실패하면 코드 묶음 + 기본 문구로 보여준다)
+        Map<String, JsonNode> byKey = new LinkedHashMap<>();
+        String aiNote = null;
+        if (!ai.isConfigured()) {
+            aiNote = NOT_CONFIGURED;
+        } else {
+            try {
+                JsonNode result = ai.extractJson(ai.generate(groupPrompt(events)), false);
+                for (JsonNode n : result.path("events")) {
+                    byKey.put(n.path("key").asString(""), n);
+                }
+            } catch (AiClient.AiBusyException e) {
+                aiNote = AI_BUSY;
+            } catch (AiClient.AiUnavailableException e) {
+                aiNote = AI_UNAVAILABLE;
+            } catch (Exception e) {
+                aiNote = "AI 해석 실패: " + shortError(e);
+            }
+        }
 
-                [묶는 규칙]
-                - 같은 서버에서 같은 자원군(예: CPU 계열: CPU/CPU Core/CPU User)의 알림은 '한 사건'으로 묶으세요.
-                - 자원이 다르면(CPU vs 메모리 vs 디스크) 다른 사건입니다.
-                - 어떤 세부 지표 조합이 떴는지로 원인 유형을 추정하세요:
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> e : events) {
+            JsonNode n = byKey.get(String.valueOf(e.get("key")));
+            String res = METRIC_KR2.getOrDefault(String.valueOf(e.get("resource")), String.valueOf(e.get("resource")));
+            Map<String, Object> ev = new LinkedHashMap<>(e);
+            ev.put("title", text(n, "title", e.get("server") + " " + res + " 사건"));
+            ev.put("count", e.get("alarmCount"));    // 예전 화면 호환: 묶은 알림 수
+            ev.put("members", e.get("alarms"));       // 예전 화면 호환: 묶인 알림 목록
+            ev.put("cause", text(n, "cause", "(AI 해석 없음) 같은 서버·같은 자원에서 동시에 발생한 알림을 한 사건으로 묶었습니다."));
+            ev.put("action", text(n, "action", "-"));
+            out.add(ev);
+        }
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("ok", true);
+        resp.put("source", "current");
+        resp.put("rawCount", alarms.size());
+        resp.put("alarms", alarms);
+        resp.put("result", Map.of("events", out));
+        if (aiNote != null) {
+            resp.put("aiNote", aiNote);
+        }
+        return resp;
+    }
+
+    private static String text(JsonNode n, String field, String fallback) {
+        String v = n == null ? "" : n.path(field).asString("");
+        return v.isBlank() ? fallback : v;
+    }
+
+    private String groupPrompt(List<Map<String, Object>> events) {
+        return """
+                당신은 관제(NOC) 도우미입니다. 아래는 AiWACS 알림을 시스템이 이미 '사건' 단위로 묶어 둔 것입니다.
+                묶음과 레벨 판정은 정확하니 바꾸지 마세요. 사건마다 관제자가 바로 이해할 제목·원인·조치만 쓰세요.
+
+                [알아둘 점]
+                - AiWACS는 한 자원을 여러 세부 지표(CPU / CPU Core / CPU User)로, 그리고 레벨(주의·경고·위험·장애)마다
+                  따로 알림을 냅니다. 그래서 alarmCount가 커도 실제로는 한 번의 상승일 수 있습니다.
+                - byLevel은 레벨별 알림 수, occurrences는 발생 횟수 합계, firstAt~lastAt은 사건 구간입니다.
+                - 세부 지표 조합으로 원인 유형을 추정하세요:
                   · User·Core·전체가 함께 → 전 코어 계산 부하
                   · Core만 높고 전체는 낮음 → 단일 스레드 병목 가능성
                   · Wait만 높음 → CPU가 아니라 디스크/IO 대기 가능성
                   · System만 높음 → 커널/네트워크/컨텍스트 스위치 폭주 가능성
+                - 같은 서버에 다른 자원 사건이 함께 있으면(예: CPU와 메모리) 연관 가능성을 짚으세요.
                 - 원인은 단정하지 말고 "가능성"으로. 반드시 JSON만 답하세요.
 
-                [출력 형식]
-                {"events": [{"title": "사건 요약(예: server1 CPU 포화)", "server": "서버", "level": "주의|경고|위험|장애 (묶인 알림 중 가장 높은 레벨)", "count": 묶은 알림 수, "members": ["원본 알림 요약1", "원본 알림 요약2"], "cause": "조합으로 본 원인 추정", "action": "권장 조치"}]}
+                [출력 형식] key는 입력의 key를 그대로 쓰세요.
+                {"events": [{"key": "입력 key", "title": "사건 요약(예: server1 CPU 장애 — 알림 12건이 한 번의 CPU 상승)", "cause": "원인 추정", "action": "권장 조치"}]}
 
-                [발생 알림]
-                %s""".formatted(ai.toJson(alarms));
-
-        JsonNode result;
-        try {
-            result = ai.extractJson(ai.generate(prompt), false);
-        } catch (AiClient.AiBusyException e) {
-            return Map.of("ok", false, "reply", AI_BUSY);
-        } catch (AiClient.AiUnavailableException e) {
-            return Map.of("ok", false, "reply", AI_UNAVAILABLE);
-        } catch (Exception e) {
-            return Map.of("ok", false, "reply", "알림 그룹핑 실패: " + shortError(e));
-        }
-        return Map.of("ok", true, "source", source, "rawCount", alarms.size(),
-                "alarms", alarms, "result", result);
+                [사건 목록]
+                %s""".formatted(ai.toJson(events));
     }
 
     /** 종(알림) 배지·목록용: AI 호출 없이 발생 알림 목록만 반환 */

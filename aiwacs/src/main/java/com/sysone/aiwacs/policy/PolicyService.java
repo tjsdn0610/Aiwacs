@@ -285,10 +285,32 @@ public class PolicyService {
         Map<String, Map<String, Object>> result = new LinkedHashMap<>();
         for (String key : CORE_METRICS) {
             double value = core.getOrDefault(key, 0.0);
-            String status = pol != null ? judge(value, pol.threshold(key)) : "정상";
-            result.put(key, Map.of("value", Math.round(value * 10) / 10.0, "status", status));
+            Threshold th = pol != null ? pol.threshold(key) : null;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("value", Math.round(value * 10) / 10.0);
+            m.put("status", judge(value, th));
+            m.put("exceeded", exceeded(value, th));
+            result.put(key, m);
         }
         return result;
+    }
+
+    /**
+     * 값이 넘은 모든 레벨 (주의 → 장애 순).
+     * AiWACS처럼 레벨마다 알람이 따로 생기므로, 장애일 때는 주의·경고·위험·장애 기준을 모두 넘은 것으로 본다.
+     */
+    public static List<Map<String, Object>> exceeded(double value, Threshold th) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (th == null) {
+            return out;
+        }
+        for (String key : List.of("caution", "warning", "danger", "critical")) {
+            Integer limit = th.get(key);
+            if (limit != null && value >= limit) {
+                out.add(Map.of("level", LEVEL_KR.get(key), "threshold", limit));
+            }
+        }
+        return out;
     }
 
     /** 판정 결과 중 가장 심각한 상태 (서버 한 대의 대표 상태) */
