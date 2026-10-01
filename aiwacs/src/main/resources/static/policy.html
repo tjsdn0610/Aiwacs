@@ -131,16 +131,19 @@
         font-size: 11px;
         font-weight: 600;
       }
-      .link {
-        color: #3f6ad8;
+      .table tbody tr {
         cursor: pointer;
-        text-decoration: underline;
       }
-      .del-link {
-        color: #d64545;
-        cursor: pointer;
+      .table td.chk,
+      .table th.chk {
+        width: 40px;
+        cursor: default;
+      }
+      .muted {
+        color: #b0b6c4;
       }
 
+      /* ===== 정책 팝업 (AiWACS 알림 정책 팝업 구성: 정책 / 장비 탭) ===== */
       .modal-bg {
         display: none;
         position: fixed;
@@ -152,14 +155,16 @@
         display: flex;
         align-items: flex-start;
         justify-content: center;
-        padding-top: 40px;
+        padding-top: 50px;
       }
       .modal {
         background: #fff;
         border-radius: 6px;
-        width: 640px;
-        max-height: 85vh;
-        overflow-y: auto;
+        width: 1000px;
+        max-width: calc(100vw - 32px);
+        height: calc(100vh - 100px);
+        display: flex;
+        flex-direction: column;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       }
       .modal-head {
@@ -170,53 +175,106 @@
         align-items: center;
       }
       .modal-head h3 {
-        font-size: 16px;
+        font-size: 15px;
         color: #3a3f52;
       }
       .modal-head .close {
         cursor: pointer;
         color: #9098aa;
-        font-size: 20px;
+        font-size: 22px;
         background: none;
         border: none;
       }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 22px;
+        border-bottom: 1px solid #eef0f4;
+      }
+      .tabs button {
+        background: none;
+        border: none;
+        padding: 10px 18px;
+        font-size: 13px;
+        color: #7a8194;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+      }
+      .tabs button.on {
+        color: #3f6ad8;
+        border-bottom-color: #3f6ad8;
+        font-weight: 600;
+      }
       .modal-body {
-        padding: 22px;
+        flex: 1;
+        overflow-y: auto;
+        padding: 18px 26px;
       }
       .form-row {
         display: flex;
         align-items: center;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
       }
       .form-row label {
-        width: 90px;
+        width: 110px;
         color: #5a6072;
-        font-weight: 600;
       }
       .form-row input[type="text"] {
         flex: 1;
-        padding: 8px 10px;
+        padding: 7px 10px;
         border: 1px solid #d5d9e2;
         border-radius: 4px;
         font-size: 13px;
       }
+      .sub-tabs {
+        display: flex;
+        gap: 4px;
+        margin: 18px 0 4px;
+        border-bottom: 1px solid #eef0f4;
+      }
+      .sub-tabs button {
+        background: none;
+        border: none;
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #7a8194;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+      }
+      .sub-tabs button.on {
+        color: #3f6ad8;
+        border-bottom-color: #3f6ad8;
+      }
       .metric-block {
-        border-top: 1px solid #eef0f4;
-        padding: 14px 0;
+        border-bottom: 1px solid #eef0f4;
+        padding: 14px 4px;
       }
       .metric-head {
-        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
         color: #3a3f52;
-        font-size: 14px;
-        margin-bottom: 10px;
+        cursor: pointer;
+        user-select: none;
       }
-      /* 알림 레벨 표 (AiWACS 정책 화면처럼 주의/경고/위험/장애 색 머리글 + 아래 입력칸) */
+      .metric-body {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .metric-body .row-label {
+        width: 96px;
+        color: #5a6072;
+        font-weight: 600;
+        font-size: 12px;
+      }
+      /* 알림 레벨 표 (주의/경고/위험/장애 색 머리글 + 아래 입력칸) */
       .lv-table {
         border-collapse: collapse;
-        margin-left: 8px;
       }
       .lv-table th {
-        width: 78px;
+        width: 72px;
         padding: 4px 0;
         color: #fff;
         font-size: 12px;
@@ -224,37 +282,44 @@
         text-align: center;
       }
       .lv-table td {
-        padding: 4px 3px;
+        padding: 0;
         text-align: center;
+        border: 1px solid #eef0f4;
       }
       .lv-table input {
-        width: 64px;
+        width: 100%;
         padding: 6px 4px;
-        border: 1px solid #d5d9e2;
-        border-radius: 4px;
+        border: none;
         text-align: center;
         font-size: 13px;
+        outline: none;
       }
       .lv-table input.bad {
-        border-color: #ee3f3a;
-        background: #fff4f4;
+        background: #fff1f1;
+        color: #d42c27;
       }
       .lv-h-caution { background: #f9b300; }
       .lv-h-warning { background: #f59a23; }
       .lv-h-danger { background: #f5652d; }
       .lv-h-critical { background: #ee3f3a; }
       .lv-hint {
-        margin: 6px 0 0 8px;
+        margin-top: 8px;
+        padding-left: 114px;
         font-size: 12px;
         color: #9098aa;
       }
       .lv-hint.bad {
         color: #ee3f3a;
       }
+      .note {
+        font-size: 12px;
+        color: #9098aa;
+        margin: 10px 4px 0;
+      }
       /* 목록의 레벨별 값 (색으로 레벨 구분) */
       .lv-vals span {
         display: inline-block;
-        min-width: 26px;
+        min-width: 24px;
         text-align: center;
         font-weight: 600;
       }
@@ -263,8 +328,33 @@
       .lv-vals .v-danger { color: #e0501c; }
       .lv-vals .v-critical { color: #d42c27; }
       .lv-vals .sep { min-width: 6px; color: #c5cad6; font-weight: 400; }
+      /* 장비 탭 */
+      .equip-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .equip-table th {
+        background: #f5f6fa;
+        padding: 9px 10px;
+        font-size: 12px;
+        color: #5a6072;
+        font-weight: 600;
+        border-bottom: 1px solid #e3e6ec;
+        text-align: left;
+      }
+      .equip-table td {
+        padding: 9px 10px;
+        border-bottom: 1px solid #f0f2f6;
+        color: #5a6072;
+      }
+      .equip-table tr.off td {
+        color: #b0b6c4;
+      }
+      .equip-table tr.sel td {
+        background: #eef3ff;
+      }
       .modal-foot {
-        padding: 16px 22px;
+        padding: 14px 22px;
         border-top: 1px solid #eef0f4;
         display: flex;
         justify-content: center;
@@ -282,6 +372,8 @@
         opacity: 0;
         transition: opacity 0.3s;
         z-index: 200;
+        white-space: pre-line;
+        pointer-events: none;
       }
       .toast.show {
         opacity: 1;
@@ -300,23 +392,26 @@
         </div>
         <div class="content">
           <div class="toolbar">
-            <button class="btn btn-primary" onclick="openAdd()">추가</button>
+            <button class="btn btn-primary" onclick="openPolicy(null)">추가</button>
+            <button class="btn btn-danger" onclick="deleteSelected()">삭제</button>
           </div>
           <table class="table">
             <thead>
               <tr>
+                <th class="chk"><input type="checkbox" id="chk-all" onclick="toggleAll(this.checked)" /></th>
                 <th>고객사</th>
                 <th>정책 명</th>
+                <th>장비 대수</th>
                 <th>CPU (주의/경고/위험/장애)</th>
                 <th>메모리 (주의/경고/위험/장애)</th>
                 <th>디스크 (주의/경고/위험/장애)</th>
-                <th>수정일자</th>
-                <th style="width: 120px">관리</th>
+                <th>등록 일자</th>
+                <th>수정 일자</th>
               </tr>
             </thead>
             <tbody id="policy-list">
               <tr>
-                <td colspan="7" class="empty">불러오는 중...</td>
+                <td colspan="9" class="empty">불러오는 중...</td>
               </tr>
             </tbody>
           </table>
@@ -324,25 +419,55 @@
       </div>
     </div>
 
-    <!-- 추가/수정 모달 -->
+    <!-- 알림 정책 팝업: 목록에서 정책을 클릭하면 열림 (AiWACS와 같은 정책 / 장비 탭 구성) -->
     <div class="modal-bg" id="modal">
       <div class="modal">
         <div class="modal-head">
-          <h3 id="modal-title">알림 정책 추가</h3>
+          <h3 id="modal-title">알림 정책</h3>
           <button class="close" onclick="closeModal()">&times;</button>
         </div>
+        <div class="tabs">
+          <button id="tab-policy" class="on" onclick="showTab('policy')">정책</button>
+          <button id="tab-equip" onclick="showTab('equip')">장비</button>
+        </div>
         <div class="modal-body">
-          <input type="hidden" id="edit-id" value="" />
-          <div class="form-row">
-            <label>고객사</label>
-            <input type="text" id="f-company" placeholder="예: 테라넷" />
+          <!-- 정책 탭 -->
+          <div id="pane-policy">
+            <div class="form-row">
+              <label>고객사</label>
+              <input type="text" id="f-company" placeholder="예: 테라넷" oninput="renderEquip()" />
+            </div>
+            <div class="form-row">
+              <label>정책 명</label>
+              <input type="text" id="f-name" placeholder="예: DB서버 정책" />
+            </div>
+            <div class="sub-tabs">
+              <button id="sub-cpumem" class="on" onclick="showSub('cpumem')">CPU/MEMORY</button>
+              <button id="sub-disk" onclick="showSub('disk')">DISK</button>
+            </div>
+            <div id="sub-pane-cpumem"></div>
+            <div id="sub-pane-disk" hidden></div>
           </div>
-          <div class="form-row">
-            <label>정책 명</label>
-            <input type="text" id="f-name" placeholder="예: DB서버 정책" />
+          <!-- 장비 탭 -->
+          <div id="pane-equip" hidden>
+            <table class="equip-table">
+              <thead>
+                <tr>
+                  <th style="width: 36px"></th>
+                  <th>장비 명</th>
+                  <th>IP</th>
+                  <th>OS</th>
+                  <th>고객사</th>
+                  <th>현재 적용 정책</th>
+                </tr>
+              </thead>
+              <tbody id="equip-list"></tbody>
+            </table>
+            <div class="note">
+              체크한 장비에 이 정책이 적용됩니다. 체크를 풀면 그 장비는 고객사의 기본 정책으로 돌아갑니다.<br />
+              장비는 자기 고객사의 정책만 사용할 수 있어, 다른 고객사 장비는 선택할 수 없습니다.
+            </div>
           </div>
-          <!-- CPU / Memory / Disk 레벨 입력 표는 아래 스크립트(renderLevelBlocks)가 채운다 -->
-          <div id="level-blocks"></div>
         </div>
         <div class="modal-foot">
           <button class="btn btn-primary" onclick="savePolicy()">저장</button>
@@ -360,10 +485,11 @@
         { key: "danger", label: "위험" },
         { key: "critical", label: "장애" },
       ];
+      // 지표 → 팝업의 하위 탭 위치 (AiWACS: CPU/MEMORY 탭, DISK 탭)
       const METRICS = [
-        { key: "cpu", label: "CPU (%)" },
-        { key: "memory", label: "Memory (%)" },
-        { key: "disk", label: "Disk (%)" },
+        { key: "cpu", label: "CPU(%)", sub: "cpumem" },
+        { key: "memory", label: "Memory(%)", sub: "cpumem" },
+        { key: "disk", label: "Disk(%)", sub: "disk" },
       ];
       // 새 정책 기본값 (PolicyService의 기본값과 같음)
       const DEFAULTS = {
@@ -372,42 +498,169 @@
         disk: { caution: 80, warning: 90, danger: 95, critical: 98 },
       };
 
+      let policies = [];
+      let servers = [];
+      let editing = null; // 수정 중인 정책 (추가면 null)
+      let equipChecked = new Set(); // 장비 탭에서 체크된 서버 id
+
+      const esc = (s) =>
+        String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      // ===== 목록 =====
+      async function loadList() {
+        const [pRes, sRes] = await Promise.all([fetch("/api/policies"), fetch("/api/servers")]);
+        policies = (await pRes.json()).policies || [];
+        servers = sRes.ok ? await sRes.json() : [];
+        document.getElementById("chk-all").checked = false;
+        const tbody = document.getElementById("policy-list");
+        if (!policies.length) {
+          tbody.innerHTML = '<tr><td colspan="9" class="empty">등록된 정책이 없습니다.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = policies
+          .map((p) => {
+            // 장비 대수 = 이 정책으로 실제 판정되는 서버 수 (기본 정책으로 적용된 서버 포함)
+            const count = servers.filter((s) => s.effectivePolicyId === p.id).length;
+            return `
+      <tr onclick="openPolicy(${p.id})">
+        <td class="chk" onclick="event.stopPropagation()"><input type="checkbox" class="row-chk" value="${p.id}" /></td>
+        <td><span class="company-tag">${esc(p.company)}</span></td>
+        <td>${esc(p.name)}</td>
+        <td>${count}</td>
+        <td>${levelCell(p.cpu)}</td>
+        <td>${levelCell(p.memory)}</td>
+        <td>${levelCell(p.disk)}</td>
+        <td style="color:#7a8194;white-space:nowrap;">${p.createdAt || "-"}</td>
+        <td style="color:#7a8194;white-space:nowrap;">${p.updatedAt || "-"}</td>
+      </tr>`;
+          })
+          .join("");
+      }
+
+      function isEmptyTh(th) {
+        return !th || LEVELS.every((l) => th[l.key] == null);
+      }
+
+      function levelCell(th) {
+        if (isEmptyTh(th)) return '<span class="muted">사용 안 함</span>';
+        return (
+          '<span class="lv-vals">' +
+          LEVELS.map((l) => `<span class="v-${l.key}">${th[l.key] ?? "-"}</span>`).join('<span class="sep">/</span>') +
+          "%</span>"
+        );
+      }
+
+      function toggleAll(on) {
+        document.querySelectorAll(".row-chk").forEach((c) => (c.checked = on));
+      }
+
+      async function deleteSelected() {
+        const ids = [...document.querySelectorAll(".row-chk:checked")].map((c) => c.value);
+        if (!ids.length) {
+          showToast("삭제할 정책을 선택해 주세요");
+          return;
+        }
+        if (!confirm(`선택한 정책 ${ids.length}개를 삭제하시겠습니까?\n이 정책을 쓰던 장비는 기본 정책으로 돌아갑니다.`)) return;
+        for (const id of ids) {
+          await fetch("/api/policies/" + id, { method: "DELETE" });
+        }
+        showToast("정책이 삭제되었습니다");
+        loadList();
+      }
+
+      // ===== 팝업 =====
       function renderLevelBlocks() {
-        document.getElementById("level-blocks").innerHTML = METRICS.map(
-          (m) => `
-          <div class="metric-block">
-            <div class="metric-head">${m.label}</div>
-            <table class="lv-table">
-              <tr>${LEVELS.map((l) => `<th class="lv-h-${l.key}">${l.label}</th>`).join("")}</tr>
-              <tr>${LEVELS.map((l) => `<td><input type="number" min="0" max="100" id="${m.key}-${l.key}" oninput="checkOrder('${m.key}')" /></td>`).join("")}</tr>
-            </table>
-            <div class="lv-hint" id="${m.key}-hint">주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 입력합니다.</div>
-          </div>`,
-        ).join("");
+        for (const sub of ["cpumem", "disk"]) {
+          document.getElementById("sub-pane-" + sub).innerHTML = METRICS.filter((m) => m.sub === sub)
+            .map(
+              (m) => `
+            <div class="metric-block">
+              <label class="metric-head">
+                <input type="checkbox" id="${m.key}-on" onchange="toggleMetric('${m.key}')" />${m.label}
+              </label>
+              <div id="${m.key}-body">
+                <div class="metric-body">
+                  <span class="row-label">알림 레벨 (%)</span>
+                  <table class="lv-table">
+                    <tr>${LEVELS.map((l) => `<th class="lv-h-${l.key}">${l.label}</th>`).join("")}</tr>
+                    <tr>${LEVELS.map((l) => `<td><input type="number" min="0" max="100" id="${m.key}-${l.key}" oninput="checkOrder('${m.key}')" /></td>`).join("")}</tr>
+                  </table>
+                </div>
+                <div class="lv-hint" id="${m.key}-hint"></div>
+              </div>
+            </div>`,
+            )
+            .join("");
+        }
       }
       renderLevelBlocks();
 
-      function fillLevels(th) {
-        for (const m of METRICS) {
-          for (const l of LEVELS) {
-            const v = th[m.key] ? th[m.key][l.key] : null;
-            document.getElementById(`${m.key}-${l.key}`).value = v ?? "";
-          }
-          checkOrder(m.key);
+      function showTab(tab) {
+        document.getElementById("tab-policy").classList.toggle("on", tab === "policy");
+        document.getElementById("tab-equip").classList.toggle("on", tab === "equip");
+        document.getElementById("pane-policy").hidden = tab !== "policy";
+        document.getElementById("pane-equip").hidden = tab !== "equip";
+      }
+
+      function showSub(sub) {
+        for (const s of ["cpumem", "disk"]) {
+          document.getElementById("sub-" + s).classList.toggle("on", s === sub);
+          document.getElementById("sub-pane-" + s).hidden = s !== sub;
         }
+      }
+
+      function openPolicy(id) {
+        editing = id == null ? null : policies.find((p) => p.id === id) || null;
+        document.getElementById("modal-title").textContent = editing ? "알림 정책" : "알림 정책 추가";
+        document.getElementById("f-company").value = editing ? editing.company : "";
+        document.getElementById("f-name").value = editing ? editing.name : "";
+        for (const m of METRICS) {
+          const th = editing ? editing[m.key] : DEFAULTS[m.key];
+          const on = !isEmptyTh(th);
+          document.getElementById(`${m.key}-on`).checked = on;
+          for (const l of LEVELS) {
+            document.getElementById(`${m.key}-${l.key}`).value = on ? (th[l.key] ?? "") : "";
+          }
+          toggleMetric(m.key, true);
+        }
+        // 장비 탭: 이 정책이 직접 지정된 서버를 체크
+        equipChecked = new Set(editing ? servers.filter((s) => s.policyId === editing.id).map((s) => s.id) : []);
+        renderEquip();
+        showTab("policy");
+        showSub("cpumem");
+        document.getElementById("modal").classList.add("show");
+      }
+
+      function closeModal() {
+        document.getElementById("modal").classList.remove("show");
+      }
+
+      /** 지표 사용 체크 (AiWACS처럼 체크하면 레벨 표가 펼쳐지고, 해제하면 그 지표는 알림을 내지 않음) */
+      function toggleMetric(metric, keepValues) {
+        const on = document.getElementById(`${metric}-on`).checked;
+        document.getElementById(`${metric}-body`).hidden = !on;
+        if (on && !keepValues && LEVELS.every((l) => document.getElementById(`${metric}-${l.key}`).value === "")) {
+          for (const l of LEVELS) document.getElementById(`${metric}-${l.key}`).value = DEFAULTS[metric][l.key];
+        }
+        checkOrder(metric);
       }
 
       function readLevels(metric) {
         const out = {};
+        const on = document.getElementById(`${metric}-on`).checked;
         for (const l of LEVELS) {
           const raw = document.getElementById(`${metric}-${l.key}`).value;
-          out[l.key] = raw === "" ? null : +raw;
+          out[l.key] = !on || raw === "" ? null : +raw;
         }
         return out;
       }
 
       /** 0~100 범위 + 주의 ≤ 경고 ≤ 위험 ≤ 장애 순서인지 확인하고 표시 (판정 순서가 꼬이지 않게) */
       function checkOrder(metric) {
+        const hint = document.getElementById(`${metric}-hint`);
+        if (!document.getElementById(`${metric}-on`).checked) {
+          return true;
+        }
         const vals = readLevels(metric);
         let prev = null;
         let ok = true;
@@ -418,119 +671,98 @@
           if (bad) ok = false;
           if (v !== null) prev = prev === null ? v : Math.max(prev, v);
         }
-        const hint = document.getElementById(`${metric}-hint`);
         hint.classList.toggle("bad", !ok);
         hint.textContent = ok
           ? "주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 입력합니다."
-          : "0~100 사이 값을 주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 입력해 주세요.";
+          : "0~100 사이 값을 주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 모두 입력해 주세요.";
         return ok;
       }
 
-      function levelCell(th) {
-        if (!th) return "-";
-        return (
-          '<span class="lv-vals">' +
-          LEVELS.map((l) => `<span class="v-${l.key}">${th[l.key] ?? "-"}</span>`).join('<span class="sep">/</span>') +
-          "%</span>"
-        );
-      }
-
-      async function loadList() {
-        const res = await fetch("/api/policies");
-        const data = await res.json();
-        const tbody = document.getElementById("policy-list");
-        if (!data.policies.length) {
-          tbody.innerHTML =
-            '<tr><td colspan="7" class="empty">등록된 정책이 없습니다.</td></tr>';
+      // ===== 장비 탭 =====
+      function renderEquip() {
+        const company = document.getElementById("f-company").value.trim();
+        const tbody = document.getElementById("equip-list");
+        if (!servers.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty">연결된 장비가 없습니다.</td></tr>';
           return;
         }
-        tbody.innerHTML = data.policies
-          .map(
-            (p) => `
-      <tr>
-        <td><span class="company-tag">${p.company}</span></td>
-        <td>${p.name}</td>
-        <td>${levelCell(p.cpu)}</td>
-        <td>${levelCell(p.memory)}</td>
-        <td>${levelCell(p.disk)}</td>
-        <td style="color:#7a8194;white-space:nowrap;">${p.updatedAt || "-"}</td>
-        <td>
-          <span class="link" onclick='openEdit(${JSON.stringify(p)})'>수정</span> &nbsp;
-          <span class="del-link" onclick="delPolicy(${p.id})">삭제</span>
-        </td>
-      </tr>`,
-          )
+        tbody.innerHTML = servers
+          .map((s) => {
+            // 다른 고객사 장비는 이 정책을 쓸 수 없음 (고객사가 없는 장비는 선택 시 이 고객사로 지정)
+            const other = s.company && company && s.company !== company;
+            const checked = equipChecked.has(s.id);
+            return `
+          <tr class="${other ? "off" : ""} ${checked ? "sel" : ""}" ${other ? 'title="다른 고객사 장비입니다"' : ""}>
+            <td><input type="checkbox" ${checked ? "checked" : ""} ${other ? "disabled" : ""} onchange="toggleEquip(${s.id}, this.checked)" /></td>
+            <td>${esc(s.name)}</td>
+            <td>${esc(s.ip)}</td>
+            <td>${esc(s.os)}</td>
+            <td>${s.company ? esc(s.company) : '<span class="muted">미지정</span>'}</td>
+            <td>${esc(s.policyName || "-")}</td>
+          </tr>`;
+          })
           .join("");
       }
 
-      function openAdd() {
-        document.getElementById("modal-title").textContent = "알림 정책 추가";
-        document.getElementById("edit-id").value = "";
-        document.getElementById("f-company").value = "";
-        document.getElementById("f-name").value = "";
-        fillLevels(DEFAULTS);
-        document.getElementById("modal").classList.add("show");
+      function toggleEquip(id, on) {
+        if (on) equipChecked.add(id);
+        else equipChecked.delete(id);
+        renderEquip();
       }
 
-      function openEdit(p) {
-        document.getElementById("modal-title").textContent = "알림 정책 수정";
-        document.getElementById("edit-id").value = p.id;
-        document.getElementById("f-company").value = p.company;
-        document.getElementById("f-name").value = p.name;
-        fillLevels(p);
-        document.getElementById("modal").classList.add("show");
-      }
-
-      function closeModal() {
-        document.getElementById("modal").classList.remove("show");
-      }
-
+      // ===== 저장 =====
       async function savePolicy() {
-        const id = document.getElementById("edit-id").value;
-        // 세 지표를 모두 검사해 표시까지 한 뒤 하나라도 틀리면 저장하지 않음
         const allOk = METRICS.map((m) => checkOrder(m.key)).every(Boolean);
         if (!allOk) {
-          showToast("레벨 값 순서를 확인해 주세요 (주의 ≤ 경고 ≤ 위험 ≤ 장애)");
+          showToast("레벨 값을 확인해 주세요 (주의 ≤ 경고 ≤ 위험 ≤ 장애)");
+          showTab("policy");
           return;
         }
         const body = {
-          company: document.getElementById("f-company").value || "미지정",
-          name: document.getElementById("f-name").value || "새 정책",
+          company: document.getElementById("f-company").value.trim() || "미지정",
+          name: document.getElementById("f-name").value.trim() || "새 정책",
           cpu: readLevels("cpu"),
           memory: readLevels("memory"),
           disk: readLevels("disk"),
         };
-        if (id) {
-          await fetch("/api/policies/" + id, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          showToast("정책이 수정되었습니다");
-        } else {
-          await fetch("/api/policies", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          showToast("정책이 추가되었습니다");
+        const res = await fetch(editing ? "/api/policies/" + editing.id : "/api/policies", {
+          method: editing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          showToast(data.error || "저장하지 못했습니다");
+          return;
         }
+        const id = editing ? editing.id : data.id;
+
+        // 장비 탭 반영 (체크 상태 그대로 저장)
+        const aRes = await fetch(`/api/policies/${id}/servers`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serverIds: [...equipChecked] }),
+        });
+        const a = await aRes.json().catch(() => ({}));
+        let msg = editing ? "정책이 수정되었습니다" : "정책이 추가되었습니다";
+        if (a.skipped && a.skipped.length) {
+          msg += "\n다른 고객사 장비는 제외했습니다: " + a.skipped.join(", ");
+        }
+        showToast(msg);
         closeModal();
         loadList();
       }
 
-      async function delPolicy(id) {
-        if (!confirm("이 정책을 삭제하시겠습니까?")) return;
-        await fetch("/api/policies/" + id, { method: "DELETE" });
-        showToast("정책이 삭제되었습니다");
-        loadList();
-      }
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
 
       function showToast(msg) {
         const t = document.getElementById("toast");
         t.textContent = msg;
         t.classList.add("show");
-        setTimeout(() => t.classList.remove("show"), 2000);
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => t.classList.remove("show"), 2600);
       }
 
       loadList();

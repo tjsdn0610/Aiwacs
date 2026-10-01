@@ -1,15 +1,19 @@
 package com.sysone.aiwacs.policy;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.sysone.aiwacs.server.MonitoredServer;
 import com.sysone.aiwacs.server.ServerRepository;
 
 /**
@@ -61,8 +65,9 @@ public class PolicyService {
      * 경고 = 주의와 위험의 중간, 장애 = 위험 + 5 (최대 100).
      */
     private static Threshold fillMissing(Threshold th, Threshold def) {
-        if (th == null) {
-            return def;
+        // 비어 있음 = 사용자가 정책에서 그 지표를 꺼 둔 것 → 그대로 둔다
+        if (th == null || th.isEmpty()) {
+            return th;
         }
         if (th.getCaution() != null && th.getWarning() != null && th.getDanger() != null && th.getCritical() != null) {
             return th;
@@ -77,6 +82,26 @@ public class PolicyService {
 
     public List<Policy> findAll() {
         return repository.findAllByOrderByIdAsc();
+    }
+
+    /**
+     * 정책 입력값 검사 (화면에서도 막지만 저장 직전에 코드가 한 번 더 확인한다).
+     * 문제가 없으면 null, 있으면 사용자에게 보여줄 문구.
+     */
+    public String validate(PolicyRequest req) {
+        if (req.name() != null && req.name().isBlank()) {
+            return "정책 명을 입력해 주세요.";
+        }
+        Map<String, Threshold> metrics = new LinkedHashMap<>();
+        metrics.put("cpu", req.cpu());
+        metrics.put("memory", req.memory());
+        metrics.put("disk", req.disk());
+        for (Map.Entry<String, Threshold> e : metrics.entrySet()) {
+            if (e.getValue() != null && !e.getValue().isValid()) {
+                return METRIC_KR.get(e.getKey()) + " 임계치는 0~100 사이 값을 주의 ≤ 경고 ≤ 위험 ≤ 장애 순으로 모두 입력해 주세요.";
+            }
+        }
+        return null;
     }
 
     @Transactional
@@ -134,9 +159,13 @@ public class PolicyService {
         if (target == null) {
             return new ChangeResult(false, "'" + company + " " + policyName + "' 정책을 찾을 수 없습니다.");
         }
-        Threshold th = metric == null ? null : target.threshold(metric);
-        if (th == null || !LEVEL_KR.containsKey(level)) {
+        if (metric == null || !METRIC_KR.containsKey(metric) || !LEVEL_KR.containsKey(level)) {
             return new ChangeResult(false, "해당 항목을 찾을 수 없습니다.");
+        }
+        Threshold th = target.threshold(metric);
+        if (th == null) {
+            return new ChangeResult(false, "[" + target.getCompany() + "] " + target.getName() + "에서는 "
+                    + METRIC_KR.get(metric) + " 알림을 사용하지 않도록 되어 있습니다. 알림 정책 화면에서 먼저 켜 주세요.");
         }
         if (value < 0 || value > 100) {
             return new ChangeResult(false, "임계치는 0~100% 범위여야 합니다. (요청값: " + value + "%)");
@@ -157,6 +186,41 @@ public class PolicyService {
         repository.save(target);
         return new ChangeResult(true, "[" + target.getCompany() + "] " + target.getName() + " · "
                 + METRIC_KR.get(metric) + " " + LEVEL_KR.get(level) + " " + old + "% → " + value + "%");
+    }
+
+    public record AssignResult(boolean ok, int assigned, int released, List<String> skipped) {}
+
+    /**
+     * 정책 팝업의 '장비' 탭: 체크한 서버에 이 정책을 지정하고, 체크를 푼 서버는 지정을 해제(→ 기본 정책)한다.
+     * 서버는 자기 고객사의 정책만 쓸 수 있으므로, 다른 고객사 서버는 건너뛰고 알려준다.
+     * 고객사가 아직 없는 서버는 이 정책의 고객사로 함께 지정한다.
+     */
+    @Transactional
+    public AssignResult assignServers(Long policyId, List<Long> serverIds) {
+        Policy policy = repository.findById(policyId).orElse(null);
+        if (policy == null) {
+            return new AssignResult(false, 0, 0, List.of());
+        }
+        Set<Long> wanted = new HashSet<>(serverIds == null ? List.of() : serverIds);
+        int assigned = 0;
+        int released = 0;
+        List<String> skipped = new ArrayList<>();
+        for (MonitoredServer s : serverRepository.findAllByOrderByIdAsc()) {
+            boolean has = policyId.equals(s.getPolicyId());
+            if (wanted.contains(s.getId()) && !has) {
+                if (s.getCompany() != null && !s.getCompany().equals(policy.getCompany())) {
+                    skipped.add(s.label() + "(고객사: " + s.getCompany() + ")");
+                    continue;
+                }
+                s.setCompany(policy.getCompany());
+                s.setPolicyId(policyId);
+                assigned++;
+            } else if (!wanted.contains(s.getId()) && has) {
+                s.setPolicyId(null);
+                released++;
+            }
+        }
+        return new AssignResult(true, assigned, released, skipped);
     }
 
     /** 기본 정책 = 첫 번째 정책 (정책을 지정하지 않은 서버에 적용) */
@@ -202,6 +266,9 @@ public class PolicyService {
 
     /** 값이 넘은 가장 높은 레벨 (장애 → 위험 → 경고 → 주의 순으로 확인, 비어 있는 레벨은 건너뜀) */
     public static String judge(double value, Threshold th) {
+        if (th == null) {
+            return "정상"; // 이 정책에서 사용하지 않는 지표
+        }
         for (String key : LEVEL_KEYS) {
             Integer limit = th.get(key);
             if (limit != null && value >= limit) {

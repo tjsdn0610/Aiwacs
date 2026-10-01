@@ -146,6 +146,7 @@ public class ServerService {
         Policy policy = policyOf(s).orElse(null);
         boolean assigned = s.getPolicyId() != null && policy != null && s.getPolicyId().equals(policy.getId());
         m.put("policyId", assigned ? policy.getId() : null);
+        m.put("effectivePolicyId", policy == null ? null : policy.getId()); // 실제로 판정에 쓰이는 정책 (기본 포함)
         m.put("policyName", policy == null ? null
                 : "[" + policy.getCompany() + "] " + policy.getName() + (assigned ? "" : " (기본)"));
         return m;

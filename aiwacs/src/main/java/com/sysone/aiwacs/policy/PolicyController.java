@@ -1,5 +1,7 @@
 package com.sysone.aiwacs.policy;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
@@ -29,17 +31,49 @@ public class PolicyController {
     }
 
     @PostMapping
-    public Map<String, Object> add(@RequestBody PolicyRequest req) {
+    public ResponseEntity<Map<String, Object>> add(@RequestBody PolicyRequest req) {
+        String error = service.validate(req);
+        if (error != null) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "error", error));
+        }
         Policy saved = service.add(req);
-        return Map.of("ok", true, "id", saved.getId());
+        return ResponseEntity.ok(Map.of("ok", true, "id", saved.getId()));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> update(@PathVariable Long id, @RequestBody PolicyRequest req) {
+        String error = service.validate(req);
+        if (error != null) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "error", error));
+        }
         if (!service.update(id, req)) {
             return ResponseEntity.status(404).body(Map.of("ok", false, "error", "not found"));
         }
         return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    /**
+     * 정책 팝업 '장비' 탭 저장 — 이 정책을 적용할 서버 목록.
+     * body: {"serverIds": [1, 2]}  (목록에 없는 서버 중 이 정책을 쓰던 서버는 기본 정책으로)
+     */
+    @PutMapping("/{id}/servers")
+    public ResponseEntity<Map<String, Object>> assignServers(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        List<Long> ids = new ArrayList<>();
+        if (body.get("serverIds") instanceof List<?> list) {
+            for (Object o : list) {
+                try {
+                    ids.add(Long.valueOf(String.valueOf(o)));
+                } catch (NumberFormatException ignored) {
+                    // 잘못된 id는 건너뜀
+                }
+            }
+        }
+        PolicyService.AssignResult r = service.assignServers(id, ids);
+        if (!r.ok()) {
+            return ResponseEntity.status(404).body(Map.of("ok", false, "error", "not found"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "assigned", r.assigned(), "released", r.released(),
+                "skipped", r.skipped()));
     }
 
     @DeleteMapping("/{id}")

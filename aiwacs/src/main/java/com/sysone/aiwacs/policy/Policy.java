@@ -64,6 +64,10 @@ public class Policy {
     })
     private Threshold disk;
 
+    /** 처음 등록된 시각 (등록 일자 기록 전에 만들어진 정책은 비어 있음) */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAt;
+
     /** 마지막으로 저장(추가·수정·AI 임계치 변경)된 시각 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime updatedAt;
@@ -79,21 +83,30 @@ public class Policy {
         this.disk = disk;
     }
 
-    /** 저장될 때마다 수정일자를 자동으로 기록 (값이 실제로 바뀐 경우에만 호출됨) */
     @PrePersist
+    void created() {
+        createdAt = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        touch();
+    }
+
+    /** 저장될 때마다 수정일자를 자동으로 기록 (값이 실제로 바뀐 경우에만 호출됨) */
     @PreUpdate
     void touch() {
         updatedAt = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
     }
 
-    /** "cpu" / "memory" / "disk" 이름으로 임계치 조회 (없는 지표면 null) */
+    /**
+     * "cpu" / "memory" / "disk" 이름으로 임계치 조회.
+     * 없는 지표이거나, 정책에서 그 지표를 사용하지 않도록 꺼 두었으면 null.
+     */
     public Threshold threshold(String metric) {
-        return switch (metric) {
+        Threshold th = switch (metric) {
             case "cpu" -> cpu;
             case "memory" -> memory;
             case "disk" -> disk;
             default -> null;
         };
+        return th == null || th.isEmpty() ? null : th;
     }
 
     public Long getId() {
@@ -138,6 +151,10 @@ public class Policy {
 
     public void setDisk(Threshold disk) {
         this.disk = disk;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 
     public LocalDateTime getUpdatedAt() {

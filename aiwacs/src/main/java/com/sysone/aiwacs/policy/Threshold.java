@@ -44,6 +44,24 @@ public class Threshold {
                 "critical".equals(level) ? value : critical);
     }
 
+    /** 네 레벨이 모두 비어 있음 = 이 지표는 정책에서 사용하지 않음 (AiWACS 정책 화면의 체크 해제) */
+    public boolean isEmpty() {
+        return caution == null && warning == null && danger == null && critical == null;
+    }
+
+    /** 사용 중인 지표라면: 네 레벨 모두 0~100 + 주의 ≤ 경고 ≤ 위험 ≤ 장애 */
+    public boolean isValid() {
+        if (isEmpty()) {
+            return true;
+        }
+        for (Integer v : new Integer[] {caution, warning, danger, critical}) {
+            if (v == null || v < 0 || v > 100) {
+                return false;
+            }
+        }
+        return isOrdered();
+    }
+
     /** 주의 ≤ 경고 ≤ 위험 ≤ 장애 순서인지 (비어 있는 레벨은 건너뜀) */
     public boolean isOrdered() {
         Integer prev = null;

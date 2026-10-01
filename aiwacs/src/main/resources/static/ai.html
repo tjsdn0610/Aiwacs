@@ -581,8 +581,9 @@
 
       // 주의/경고/위험/장애 임계치를 "70/80/90/95" 형태로
       function lvVals(th) {
-        if (!th) return "-";
-        return ["caution", "warning", "danger", "critical"].map((k) => th[k] ?? "-").join("/");
+        const keys = ["caution", "warning", "danger", "critical"];
+        if (!th || keys.every((k) => th[k] == null)) return "사용 안 함";
+        return keys.map((k) => th[k] ?? "-").join("/");
       }
 
       async function loadPolicies() {
