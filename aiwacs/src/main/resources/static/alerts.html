@@ -56,22 +56,24 @@
       .pager { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; font-size: 12px; color: #7a8194; }
       .pager button { font-family: inherit; border: 1px solid #d5d9e2; background: #fff; border-radius: 6px; padding: 3px 9px; cursor: pointer; color: #3a3f52; }
       .pager button:disabled { opacity: .4; cursor: default; }
-      .event { border: 1px solid #e3e6ec; border-radius: 10px; padding: 14px 16px; margin-top: 10px; background: #f8f9fc; }
-      .event .eh { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-      .event .eh .et { font-weight: 700; color: #232838; }
-      .event .ek { color: #9098aa; font-weight: 700; font-size: 11px; margin-top: 6px; }
-      .event .ev { color: #3a4055; font-size: 12.5px; }
-      .note { color: #9aa1b2; font-size: 11px; margin-top: 10px; }
-      /* AI 묶음 아코디언 */
-      .ev-acc { border: 1px solid #e3e6ec; border-radius: 9px; margin-top: 10px; background: #fff; overflow: hidden; }
-      .ev-top { display: flex; align-items: center; gap: 8px; padding: 12px 14px; cursor: pointer; }
-      .ev-top:hover { background: #f8f9fc; }
-      .ev-arrow { color: #3f6ad8; font-size: 11px; width: 13px; text-align: center; }
-      .ev-title { font-weight: 700; color: #232838; }
-      .ev-cnt { margin-left: auto; color: #9098aa; font-size: 11.5px; }
-      .ev-detail { padding: 2px 16px 14px 35px; border-top: 1px solid #eef0f4; }
-      .ev-detail .ek { color: #9098aa; font-weight: 700; font-size: 11px; margin-top: 8px; }
-      .ev-detail .ev { color: #3a4055; font-size: 12.5px; }
+      /* 사건 묶기: 한 사건 = 한 줄 */
+      .ev-table { font-size: 12.5px; }
+      .ev-table td { padding: 9px 10px; border-bottom: 1px solid #eef0f4; white-space: nowrap; vertical-align: middle; }
+      .ev-row { cursor: pointer; }
+      .ev-row:hover td, .ev-row.open td { background: #f8f9fc; }
+      .ev-arrow { color: #3f6ad8; font-size: 10px; }
+      .ev-t { font-weight: 700; color: #232838; white-space: normal !important; min-width: 220px; }
+      .chip { margin-right: 3px; padding: 1px 7px !important; font-size: 10.5px !important; }
+      .ev-state { font-size: 11px; font-weight: 700; color: #8a91a3; }
+      .ev-state.on { color: #d64545; }
+      .ev-go { text-align: right; }
+      .ev-go a, .ev-go button { font-family: inherit; font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 6px; border: 1px solid #b9c9f2; background: #fff; color: #3f6ad8; text-decoration: none; cursor: pointer; margin-left: 4px; }
+      .ev-go a:hover, .ev-go button:hover { background: #eef3fc; }
+      .ev-more td { background: #f8f9fc; white-space: normal; line-height: 1.7; color: #3a4055; padding-top: 2px; }
+      .ev-more b { color: #3f6ad8; font-size: 11.5px; margin-right: 6px; }
+      .ev-moreall { padding: 8px 16px 12px; }
+      .ev-moreall button { font-family: inherit; font-size: 12px; border: none; background: none; color: #3f6ad8; font-weight: 700; cursor: pointer; }
+      .grp .sub { color: #9098aa; font-size: 11.5px; }
       .loading { padding: 20px; color: #9098aa; text-align: center; }
       .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(16px); background: #232838; color: #fff; padding: 11px 20px; border-radius: 10px; font-size: 13px; opacity: 0; pointer-events: none; transition: all .28s; z-index: 50; }
       .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -95,9 +97,6 @@
       .filter { display: inline-flex; align-items: center; gap: 6px; background: #eef3fc; color: #2f52b0; border-radius: 14px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
       .filter a { color: #7a8194; text-decoration: none; font-weight: 400; }
       tr.on td { background: #f5f8ff; }
-      .ev-links { display: flex; gap: 8px; margin-top: 12px; }
-      .ev-links a, .ev-links button { font-family: inherit; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 7px; border: 1px solid #b9c9f2; background: #fff; color: #3f6ad8; text-decoration: none; cursor: pointer; }
-      .ev-links a:hover, .ev-links button:hover { background: #eef3fc; }
       @media (max-width: 720px) { .sidebar { display: none; } }
     </style>
   </head>
@@ -309,6 +308,14 @@
       }
 
       // 사건 묶기: 발생 중 + 아직 처리가 끝나지 않은 알림을 사건 단위로 모아 표 '위'에 보여준다 (원본 알림은 그대로)
+      // 한 사건 = 한 줄 (레벨별 알림 수는 작은 칩). AI 원인·조치는 줄을 눌렀을 때만 펼친다.
+      const RES_KR = { cpu: "CPU", memory: "메모리", disk: "디스크" };
+      const LV_ORDER = ["장애", "위험", "경고", "주의"];
+      const EV_SHOW = 5;
+      let evList = [];
+      let evOpen = -1;
+      let evAll = false;
+
       async function groupActive() {
         const grp = document.getElementById("grp");
         const btn = document.getElementById("groupBtn");
@@ -318,32 +325,14 @@
         try {
           const d = await (await fetch("/api/ai/alarm-group", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demo: false, scope: "open" }) })).json();
           if (!d.ok) { grp.innerHTML = `<div class="card"><div class="empty" style="color:#a03535">${esc(d.reply)}</div></div>`; return; }
-          const events = (d.result && d.result.events) || [];
-          const raw = d.rawCount || 0;
-          if (!events.length) {
+          evList = (d.result && d.result.events) || [];
+          evOpen = -1;
+          evAll = false;
+          if (!evList.length) {
             grp.innerHTML = '<div class="card"><div class="empty">묶을 알림이 없습니다 — 지금 발생 중이거나 처리가 남은 알림이 없어요.</div></div>';
             return;
           }
-          grp.innerHTML = `<div class="card"><div class="card-head">✦ 사건 <span class="cnt">${events.length}</span>건 <span style="color:#9098aa;font-weight:400;font-size:12px">알림 ${raw}건 → 사건 ${events.length}건 (원본 알림·발생 횟수는 아래 표에 그대로)</span><span class="x" onclick="document.getElementById('grp').innerHTML=''" title="닫기">✕</span></div>
-            <div style="padding:4px 16px 14px">${events.map((e, i) => `
-              <div class="ev-acc">
-                <div class="ev-top" onclick="toggleEv(${i})">
-                  <span class="ev-arrow" id="evarr-${i}">${i === 0 ? "▼" : "▶"}</span>
-                  <span class="${lvClass(e.level)}">${esc(e.level)}</span>
-                  <span class="ev-title">${esc(e.title)}</span>
-                  <span class="ev-cnt">${e.activeCount ? '<b style="color:#d64545">발생 중</b>' : "해제됨 · 처리 필요"} · ${esc(String(e.firstAt).slice(11, 16))}~${esc(String(e.lastAt).slice(11, 16))} · 알림 ${esc(e.alarmCount)}건</span>
-                </div>
-                <div class="ev-detail" id="evdet-${i}" ${i === 0 ? "" : "hidden"}>
-                  <div class="ek">묶인 알림</div><div class="ev">${(e.members || []).map(esc).join("<br>")}</div>
-                  <div class="ek">원인 추정</div><div class="ev">${esc(e.cause)}</div>
-                  <div class="ek">권장 조치</div><div class="ev">${esc(e.action)}</div>
-                  <div class="ev-links">
-                    <a href="/ai?serverId=${esc(String(e.key).split("|")[0])}&minutes=30&run=1#diagnose">✦ AI 진단 · 조치</a>
-                    <button onclick='selectIds(${JSON.stringify(e.alarmIds || [])})'>이 사건 알림 선택해서 처리</button>
-                  </div>
-                </div>
-              </div>`).join("")}
-            </div></div>`;
+          renderEvents(d.rawCount || 0, d.aiNote);
         } catch (e) {
           grp.innerHTML = '<div class="card"><div class="empty" style="color:#a03535">묶기 중 오류가 발생했습니다.</div></div>';
         } finally {
@@ -352,12 +341,50 @@
         }
       }
 
+      function renderEvents(raw, aiNote) {
+        const shown = evAll ? evList : evList.slice(0, EV_SHOW);
+        const hhmm = (s) => esc(String(s || "").slice(11, 16));
+        const rows = shown.map((e, i) => {
+          const chips = LV_ORDER.filter((lv) => (e.byLevel || {})[lv])
+            .map((lv) => `<span class="${lvClass(lv)} chip">${lv} ${e.byLevel[lv]}</span>`).join("");
+          const state = e.activeCount ? '<span class="ev-state on">발생 중</span>' : '<span class="ev-state">해제 · 처리 필요</span>';
+          const main = `<tr class="ev-row ${evOpen === i ? "open" : ""}" onclick="toggleEv(${i})">
+              <td><span class="ev-arrow">${evOpen === i ? "▼" : "▶"}</span></td>
+              <td><span class="${lvClass(e.level)}">${esc(e.level)}</span></td>
+              <td class="ev-t">${esc(e.title)}</td>
+              <td class="dev">${esc(e.server)} · ${esc(RES_KR[e.resource] || e.resource)}</td>
+              <td class="mono">${hhmm(e.firstAt)}~${hhmm(e.lastAt)}</td>
+              <td>${chips}</td>
+              <td>${state}</td>
+              <td class="ev-go" onclick="event.stopPropagation()">
+                <a href="/ai?serverId=${esc(String(e.key).split("|")[0])}&minutes=30&run=1#diagnose">✦ 진단·조치</a>
+                <button onclick='selectIds(${JSON.stringify(e.alarmIds || [])})'>알림 ${esc(e.alarmCount)}건 선택</button>
+              </td>
+            </tr>`;
+          const detail = evOpen === i
+            ? `<tr class="ev-more"><td></td><td colspan="7">
+                <div><b>원인 추정 (AI)</b> ${esc(e.cause)}</div>
+                <div><b>권장 조치 (AI)</b> ${esc(e.action)}</div>
+                <div class="sub">발생 횟수 합계 ${esc(e.occurrences)}회 · 지표 ${esc((e.metrics || []).join(", "))} · 원본 알림은 아래 표에 그대로</div>
+              </td></tr>`
+            : "";
+          return main + detail;
+        }).join("");
+        const more = evList.length > EV_SHOW
+          ? `<div class="ev-moreall"><button onclick="evAll=!evAll; renderEvents(${raw})">${evAll ? "접기" : `사건 ${evList.length - EV_SHOW}건 더 보기`}</button></div>`
+          : "";
+        document.getElementById("grp").innerHTML = `<div class="card">
+          <div class="card-head">✦ 사건 <span class="cnt">${evList.length}</span>건
+            <span class="sub" style="font-weight:400">알림 ${raw}건을 서버·자원별로 모음 · 줄을 누르면 AI 원인·조치</span>
+            <span class="x" onclick="document.getElementById('grp').innerHTML=''" title="닫기">✕</span></div>
+          ${aiNote ? `<div class="sub" style="padding:8px 16px 0;color:#a0661a">${esc(aiNote)} — 묶음만 표시합니다.</div>` : ""}
+          <div class="table-wrap"><table class="ev-table"><tbody>${rows}</tbody></table></div>${more}
+        </div>`;
+      }
+
       function toggleEv(i) {
-        const det = document.getElementById("evdet-" + i);
-        const arr = document.getElementById("evarr-" + i);
-        if (!det) return;
-        det.hidden = !det.hidden;
-        if (arr) arr.textContent = det.hidden ? "▶" : "▼";
+        evOpen = evOpen === i ? -1 : i;
+        renderEvents(evList.reduce((n, e) => n + (e.alarmCount || 0), 0));
       }
 
       load();
