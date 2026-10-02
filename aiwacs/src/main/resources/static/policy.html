@@ -42,28 +42,6 @@
         flex-direction: column;
         min-width: 0;
       }
-      .topbar {
-        background: #fff;
-        border-bottom: 1px solid #e3e6ec;
-        padding: 10px 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .breadcrumb {
-        color: #7a8194;
-        font-size: 12px;
-      }
-      .breadcrumb b {
-        color: #3f6ad8;
-      }
-      .topbar-right {
-        color: #7a8194;
-        font-size: 12px;
-      }
-      .topbar-right b {
-        color: #3f6ad8;
-      }
       .content {
         padding: 16px;
       }
@@ -319,9 +297,10 @@
       /* 목록의 레벨별 값 (색으로 레벨 구분) */
       .lv-vals span {
         display: inline-block;
-        min-width: 24px;
+        min-width: 28px; /* 100(세 자리)도 들어가게 → 줄마다 % 위치가 같음 */
         text-align: center;
         font-weight: 600;
+        font-variant-numeric: tabular-nums;
       }
       .lv-vals .v-caution { color: #c98f00; }
       .lv-vals .v-warning { color: #d97a0a; }
@@ -388,8 +367,9 @@
       <div class="main">
         <div class="topbar">
           <div class="breadcrumb">홈 &gt; 정책 관리 &gt; <b>알림 정책</b></div>
-          <div class="topbar-right"><b>aiwacs</b>님, 환영합니다.</div>
+          <div class="topbar-right"></div>
         </div>
+        <script src="/topbar.js"></script>
         <div class="content">
           <div class="toolbar">
             <button class="btn btn-primary" onclick="openPolicy(null)">추가</button>

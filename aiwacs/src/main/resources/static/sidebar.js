@@ -12,7 +12,7 @@
       label: "AI 운영 도우미",
       children: [
         { label: "상태 진단", href: "/ai#diagnose" },
-        { label: "임계치 변경", href: "/ai#threshold" },
+        { label: "정책 설정", href: "/ai#threshold" },
       ],
     },
     { label: "장비 목록", href: "/servers" },
@@ -140,7 +140,7 @@
   style.textContent = STYLE;
   document.head.appendChild(style);
   render();
-  // AI 화면에서 상태 진단 ↔ 임계치 변경을 오갈 때 선택 표시를 다시 그림
+  // AI 화면에서 상태 진단 ↔ 정책 설정을 오갈 때 선택 표시를 다시 그림
   window.addEventListener("hashchange", render);
   window.refreshSidebar = render;
 })();
