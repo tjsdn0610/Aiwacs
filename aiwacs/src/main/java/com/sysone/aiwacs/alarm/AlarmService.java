@@ -5,9 +5,11 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -137,6 +139,7 @@ public class AlarmService {
             }
         }
         List<Map<String, Object>> rows = new ArrayList<>();
+        Map<Map<String, Object>, Instant> at = new IdentityHashMap<>(); // 정렬용 원래 시각(밀리초보다 정밀)
         for (List<Object[]> batch : batches.values()) {
             List<Alarm> alarms = batch.stream().map(x -> (Alarm) x[0])
                     .sorted(Comparator.comparingInt((Alarm a) -> LEVEL_ORDER.indexOf(a.getLevel())).reversed()).toList();
@@ -155,9 +158,13 @@ public class AlarmService {
             m.put("resolvedAt", allResolved
                     ? Alarm.fmt(alarms.stream().map(Alarm::getResolvedAt).max(Comparator.naturalOrder()).orElseThrow()) : null);
             m.put("atMillis", r.at().toEpochMilli());
+            at.put(m, r.at());
             rows.add(m);
         }
-        rows.sort(Comparator.comparingLong((Map<String, Object> m) -> (long) m.get("atMillis")).reversed());
+        // 최신 기록이 위. 밀리초가 같아도 순서가 바뀌지 않게 원래 시각(Instant)으로 비교하고,
+        // 그래도 같으면 나중에 만들어진 묶음이 위로 (뒤집은 뒤 정렬 — List.sort는 같은 값의 순서를 유지)
+        Collections.reverse(rows);
+        rows.sort(Comparator.comparing((Map<String, Object> m) -> at.get(m)).reversed());
         return rows;
     }
 
