@@ -1,10 +1,12 @@
 package com.sysone.aiwacs.alarm;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -121,27 +123,59 @@ public class AlarmService {
         return all.stream().map(Alarm::toMap).toList();
     }
 
-    /** 처리 내역: 처리 기록 한 줄씩 (최신순). 같은 알람에 '조치 중 → 완료'처럼 여러 줄이 쌓인다. */
+    /**
+     * 처리 내역 (최신순). 한 번에 같이 저장한 기록(같은 시각·처리자·상태·내용)은 한 줄로 묶는다.
+     * 예) 사건 하나의 알림 12건을 '완료'로 한 번에 기록 → 12줄이 아니라 "알림 12건" 한 줄.
+     * 같은 알림에 '점검 중 → 완료'처럼 다른 때 남긴 기록은 줄이 따로 쌓인다.
+     */
     public List<Map<String, Object>> handled() {
-        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, List<Object[]>> batches = new LinkedHashMap<>(); // key → [알람, 기록]
         for (Alarm a : all) {
             for (Alarm.ProcessRecord r : a.getProcesses()) {
-                Map<String, Object> m = new LinkedHashMap<>(Alarm.recordMap(r));
-                m.put("alarmId", a.getId());
-                m.put("server", a.getServer());
-                m.put("company", a.getCompany());
-                m.put("metric", a.getMetric());
-                m.put("title", a.title());
-                m.put("level", a.getLevel());
-                m.put("alarmStatus", a.getStatus().name());
-                m.put("firstAt", Alarm.fmt(a.getFirstAt()));
-                m.put("resolvedAt", Alarm.fmt(a.getResolvedAt()));
-                m.put("atMillis", r.at().toEpochMilli());
-                rows.add(m);
+                String key = r.at().toEpochMilli() + "|" + r.by() + "|" + r.status() + "|" + r.action() + "|" + r.note();
+                batches.computeIfAbsent(key, k -> new ArrayList<>()).add(new Object[] {a, r});
             }
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (List<Object[]> batch : batches.values()) {
+            List<Alarm> alarms = batch.stream().map(x -> (Alarm) x[0])
+                    .sorted(Comparator.comparingInt((Alarm a) -> LEVEL_ORDER.indexOf(a.getLevel())).reversed()).toList();
+            Alarm.ProcessRecord r = (Alarm.ProcessRecord) batch.get(0)[1];
+            Map<String, Object> m = new LinkedHashMap<>(Alarm.recordMap(r));
+            m.put("alarmCount", alarms.size());
+            m.put("alarmIds", alarms.stream().map(Alarm::getId).toList());
+            m.put("server", String.join(", ", alarms.stream().map(Alarm::getServer).distinct().toList()));
+            m.put("company", String.join(", ", alarms.stream().map(Alarm::getCompany)
+                    .filter(c -> c != null && !c.isBlank()).distinct().toList()));
+            m.put("level", alarms.get(0).getLevel()); // 가장 심각한 레벨
+            m.put("title", alarms.get(0).title() + (alarms.size() > 1 ? " 외 " + (alarms.size() - 1) + "건" : ""));
+            m.put("alarms", alarms.stream().map(a -> a.getLevel() + " · " + a.title()).toList());
+            m.put("firstAt", Alarm.fmt(alarms.stream().map(Alarm::getFirstAt).min(Comparator.naturalOrder()).orElseThrow()));
+            boolean allResolved = alarms.stream().allMatch(a -> a.getResolvedAt() != null);
+            m.put("resolvedAt", allResolved
+                    ? Alarm.fmt(alarms.stream().map(Alarm::getResolvedAt).max(Comparator.naturalOrder()).orElseThrow()) : null);
+            m.put("atMillis", r.at().toEpochMilli());
+            rows.add(m);
         }
         rows.sort(Comparator.comparingLong((Map<String, Object> m) -> (long) m.get("atMillis")).reversed());
         return rows;
+    }
+
+    /**
+     * 조치 결과를 그 서버의 '처리가 끝나지 않은' 알람(발생 중·미처리·점검 중·보류)에 처리 기록으로 남긴다.
+     * 조치는 처리 과정 중에 하는 행동이므로, 결과를 따로 두지 않고 처리 내역 한 곳에 모은다.
+     * @return 기록을 남긴 알람 수 (0이면 관련 알람이 없었던 것 — 조치 자체는 /api/actions에 남아 있음)
+     */
+    public int recordAction(Long serverId, String by, String note) {
+        Instant now = Instant.now();
+        int n = 0;
+        for (Alarm a : all) {
+            if (a.getServerId().equals(serverId) && (a.getStatus() == Alarm.Status.ACTIVE || isOpenWork(a))) {
+                a.processByAction(by, note, now);
+                n++;
+            }
+        }
+        return n;
     }
 
     /** id로 알람 찾기 (AI 처리 기록 초안용) */
@@ -150,16 +184,44 @@ public class AlarmService {
         return all.stream().filter(a -> set.contains(a.getId())).toList();
     }
 
+    /** 이 시간보다 떨어져 생긴 알람은 같은 서버·자원이어도 다른 사건으로 본다 */
+    private static final Duration EVENT_GAP = Duration.ofMinutes(10);
+
+    /** 종(알림) 패널용: 지금 발생 중인 알람만 사건으로 묶는다 */
+    public List<Map<String, Object>> events() {
+        return events(false);
+    }
+
     /**
-     * 현재 발생 중 알람을 '사건' 단위로 묶는다 (AI가 아니라 코드가 묶음 — 결과가 항상 같다).
+     * 알람을 '사건' 단위로 묶는다 (AI가 아니라 코드가 묶음 — 결과가 항상 같다).
      * 같은 서버 + 같은 자원(cpu/memory/disk)이면 지표·레벨이 달라도 한 사건.
      * 예) CPU 장애 시: CPU/CPU Core/CPU User × 주의/경고/위험/장애 = 12건 → 사건 1건.
+     *
+     * @param includeOpenWork true면 이미 해제됐어도 아직 처리가 끝나지 않은(미처리·점검 중·보류) 알람도 포함
+     *                        (알림 내역에서 부하가 끝난 뒤에 처리하러 왔을 때 쓰기 위해). 원본 알람은 그대로 둔다.
      */
-    public List<Map<String, Object>> events() {
+    public List<Map<String, Object>> events(boolean includeOpenWork) {
+        List<Alarm> targets = all.stream()
+                .filter(a -> a.getStatus() == Alarm.Status.ACTIVE || (includeOpenWork && isOpenWork(a)))
+                .sorted(Comparator.comparing(Alarm::getFirstAt))
+                .toList();
+        // 같은 서버·자원이라도 시간이 EVENT_GAP 이상 떨어져 있으면 다른 사건
         Map<String, List<Alarm>> groups = new LinkedHashMap<>();
-        all.stream()
-                .filter(a -> a.getStatus() == Alarm.Status.ACTIVE)
-                .forEach(a -> groups.computeIfAbsent(a.getServerId() + "|" + a.getResource(), k -> new ArrayList<>()).add(a));
+        Map<String, Instant> groupEnd = new HashMap<>();
+        Map<String, Integer> seqOf = new HashMap<>();
+        for (Alarm a : targets) {
+            String base = a.getServerId() + "|" + a.getResource();
+            int n = seqOf.getOrDefault(base, 0);
+            Instant end = groupEnd.get(base + "|" + n);
+            if (end != null && a.getFirstAt().isAfter(end.plus(EVENT_GAP))) {
+                n++;
+                seqOf.put(base, n);
+            }
+            String key = n == 0 ? base : base + "|" + n;
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(a);
+            Instant aEnd = a.getResolvedAt() != null ? a.getResolvedAt() : Instant.now();
+            groupEnd.merge(base + "|" + n, aEnd, (x, y) -> x.isAfter(y) ? x : y);
+        }
 
         List<Map<String, Object>> events = new ArrayList<>();
         for (Map.Entry<String, List<Alarm>> g : groups.entrySet()) {
@@ -183,8 +245,11 @@ public class AlarmService {
             e.put("occurrences", list.stream().mapToInt(Alarm::getCount).sum());
             e.put("byLevel", byLevel);
             e.put("metrics", list.stream().map(Alarm::getMetric).distinct().toList());
-            e.put("firstAt", FMT.format(list.stream().map(Alarm::getFirstAt).min(Comparator.naturalOrder()).orElseThrow()));
+            Instant evStart = list.stream().map(Alarm::getFirstAt).min(Comparator.naturalOrder()).orElseThrow();
+            e.put("firstAt", FMT.format(evStart));
+            e.put("firstAtMillis", evStart.toEpochMilli()); // AI 진단 구간을 사건 시작에 맞추는 데 씀
             e.put("lastAt", FMT.format(list.stream().map(Alarm::getLastAt).max(Comparator.naturalOrder()).orElseThrow()));
+            e.put("activeCount", (int) list.stream().filter(a -> a.getStatus() == Alarm.Status.ACTIVE).count());
             e.put("alarmIds", list.stream().map(Alarm::getId).toList());
             e.put("alarms", list.stream()
                     .sorted(Comparator.comparingInt((Alarm a) -> LEVEL_ORDER.indexOf(a.getLevel())).reversed())
@@ -192,9 +257,16 @@ public class AlarmService {
                     .toList());
             events.add(e);
         }
-        // 심각한 사건부터
-        events.sort(Comparator.comparingInt((Map<String, Object> e) -> LEVEL_ORDER.indexOf(String.valueOf(e.get("level")))).reversed());
+        // 발생 중인 사건 먼저, 그다음 심각한 사건부터
+        events.sort(Comparator.comparing((Map<String, Object> e) -> (int) e.get("activeCount") == 0)
+                .thenComparing(Comparator.comparingInt((Map<String, Object> e) -> LEVEL_ORDER.indexOf(String.valueOf(e.get("level")))).reversed()));
         return events;
+    }
+
+    /** 처리가 아직 끝나지 않은 알람 (미처리·점검 중·보류) */
+    private static boolean isOpenWork(Alarm a) {
+        Alarm.ProcessStatus p = a.lastProcess();
+        return p != Alarm.ProcessStatus.COMPLETE && p != Alarm.ProcessStatus.IGNORE;
     }
 
     /** 선택한 알람들에 처리 기록 추가 (발생 중이든 해제됐든 기록 가능. 발생/해제 상태는 바뀌지 않음) */

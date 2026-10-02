@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.sysone.aiwacs.alarm.AlarmService;
 import com.sysone.aiwacs.server.AgentReport;
 import com.sysone.aiwacs.server.MonitoredServer;
 import com.sysone.aiwacs.server.ServerService;
@@ -49,13 +50,25 @@ public class ActionService {
     private static final int MAX = 200;
 
     private final ServerService servers;
+    private final AlarmService alarms;
     private final boolean simulation;
     private final AtomicLong seq = new AtomicLong();
     private final ConcurrentLinkedDeque<ActionCommand> all = new ConcurrentLinkedDeque<>();
 
-    public ActionService(ServerService servers, @Value("${action.simulation:false}") boolean simulation) {
+    public ActionService(ServerService servers, AlarmService alarms,
+                         @Value("${action.simulation:false}") boolean simulation) {
         this.servers = servers;
+        this.alarms = alarms;
         this.simulation = simulation;
+    }
+
+    /**
+     * 조치를 끝내고(성공·실패·만료·시뮬레이션 모두), 그 결과를 관련 알람의 처리 기록으로 남긴다.
+     * 조치는 처리 과정 중 하는 행동 하나라서, 결과를 처리 내역 한 곳에서 사건 경과와 함께 보게 한다.
+     */
+    private void finish(ActionCommand c, ActionCommand.Status status, String message, Instant now) {
+        c.finish(status, message, now);
+        c.recorded(alarms.recordAction(c.getServerId(), c.getBy(), c.recordNote()));
     }
 
     public boolean isSimulation() {
@@ -115,7 +128,7 @@ public class ActionService {
         ActionCommand c = new ActionCommand(seq.incrementAndGet(), serverId, server.label(), action, pid, name,
                 start, by == null || by.isBlank() ? "aiwacs" : by.strip(), reason, t);
         if (simulation) {
-            c.finish(ActionCommand.Status.SIMULATED,
+            finish(c, ActionCommand.Status.SIMULATED,
                     "시뮬레이션 모드라 실제로 실행하지 않았습니다 (" + ActionCommand.actionKr(action) + " 요청만 기록).", t);
         }
         all.addFirst(c);
@@ -154,7 +167,7 @@ public class ActionService {
             for (ActionCommand c : all) {
                 if (c.getId() == id && c.getServerId().equals(serverId) && c.getStatus() == ActionCommand.Status.SENT) {
                     boolean ok = Boolean.parseBoolean(String.valueOf(r.get("ok")));
-                    c.finish(ok ? ActionCommand.Status.DONE : ActionCommand.Status.FAILED,
+                    finish(c, ok ? ActionCommand.Status.DONE : ActionCommand.Status.FAILED,
                             String.valueOf(r.get("message")), now);
                 }
             }
@@ -167,9 +180,9 @@ public class ActionService {
         Instant now = Instant.now();
         for (ActionCommand c : all) {
             if (c.getStatus() == ActionCommand.Status.PENDING && c.getCreatedAt().plus(PICKUP_TIMEOUT).isBefore(now)) {
-                c.finish(ActionCommand.Status.EXPIRED, "30초 안에 Agent가 명령을 가져가지 않아 취소했습니다 (Agent 연결 확인 필요).", now);
+                finish(c, ActionCommand.Status.EXPIRED, "30초 안에 Agent가 명령을 가져가지 않아 취소했습니다 (Agent 연결 확인 필요).", now);
             } else if (c.getStatus() == ActionCommand.Status.SENT && c.getSentAt().plus(RESULT_TIMEOUT).isBefore(now)) {
-                c.finish(ActionCommand.Status.FAILED, "Agent에 전달했지만 결과를 받지 못했습니다. 서버에서 직접 확인해 주세요.", now);
+                finish(c, ActionCommand.Status.FAILED, "Agent에 전달했지만 결과를 받지 못했습니다. 서버에서 직접 확인해 주세요.", now);
             }
         }
     }

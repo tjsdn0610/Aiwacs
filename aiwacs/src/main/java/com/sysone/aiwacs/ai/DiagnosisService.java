@@ -67,6 +67,23 @@ public class DiagnosisService {
 
     // ===================== 1) 상태 진단 + 조치 제안 =====================
 
+    /** 사건에서 들어왔을 때: 사건 시작보다 이만큼 앞부터 본다 (부하 '전' 모습이 구간에 들어가야 "새로 등장"을 판단할 수 있음) */
+    private static final Duration BEFORE_EVENT = Duration.ofMinutes(5);
+
+    /**
+     * 사건 기준 진단: 구간을 "사건 시작 5분 전 ~ 지금"으로 자동으로 맞춘다.
+     * 운영자가 몇 분을 볼지 고민할 필요 없이, 항상 '부하 전 → 시작 → 지금'이 구간에 들어간다.
+     * (사건이 MAX_MINUTES보다 오래됐으면 최근 MAX_MINUTES분까지만)
+     */
+    public Map<String, Object> diagnoseSince(Long serverId, Instant eventStart) {
+        long minutes = (long) Math.ceil(Duration.between(eventStart.minus(BEFORE_EVENT), Instant.now()).toSeconds() / 60.0);
+        Map<String, Object> resp = diagnose(serverId, (int) Math.max(1, minutes));
+        if (Boolean.TRUE.equals(resp.get("ok"))) {
+            resp.put("eventStart", Alarm.fmt(eventStart));
+        }
+        return resp;
+    }
+
     /**
      * @param minutes 0이면 "지금 이 순간"만, 1 이상이면 최근 N분 이력까지 보고 원인 프로세스를 찾는다
      *                (부하가 이미 끝난 뒤에 눌러도 그 시간에 무슨 일이 있었는지 알 수 있게)
@@ -130,6 +147,7 @@ public class DiagnosisService {
         resp.put("serverId", serverId);
         resp.put("server", server.label());
         resp.put("minutes", minutes);
+        resp.put("windowFrom", minutes > 0 ? Alarm.fmt(from) : null);
         resp.put("status", status);
         resp.put("diagnosis", result);
         resp.put("trend", trend.stream().map(h -> List.of(h.getTime().toEpochMilli(), h.getCpu(), h.getMemory())).toList());
@@ -323,8 +341,9 @@ public class DiagnosisService {
         }
         String prompt = """
                 당신은 서버 관제 담당자의 처리 기록 작성을 돕습니다. 아래 사실만으로 처리 기록 초안을 쓰세요.
-                - 처리 상태는 "%s"입니다. 상태에 맞게 쓰세요 (조치 중: 지금 무엇을 하고 있는지 / 완료: 원인·조치·결과 / 보류·무시: 그 판단 이유).
-                - 3~4문장, 한국어, 존댓말 없이 기록체(~함, ~임). 시각과 수치는 사실에 있는 것만 쓰고 지어내지 마세요.
+                - 처리 상태는 "%s"입니다. 상태에 맞게 쓰세요 (점검 중: 지금 무엇을 하고 있는지 / 완료: 원인·조치·결과 / 보류·무시: 그 판단 이유).
+                - 2문장 이내, 150자 이내로 짧게. 한국어 기록체(~함, ~임). 알림을 하나씩 나열하지 말고 "CPU 알림 12건"처럼 요약하세요.
+                - 시각과 수치는 사실에 있는 것만 쓰고 지어내지 마세요.
                 - 원인은 진단 결과가 있을 때만 "~로 추정"으로 쓰고, 없으면 "원인 확인 필요"라고 쓰세요.
                 - 조치 이력이 있으면 누가 무엇을 실행했고 결과가 어땠는지 포함하세요.
                 - JSON만: {"draft": "초안 문장"}

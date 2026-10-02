@@ -721,11 +721,9 @@
               <select id="diag-server" class="diag-server">
                 <option value="">서버 불러오는 중...</option>
               </select>
-              <select id="diag-period" class="diag-period" title="부하가 이미 끝났어도 이 구간의 이력으로 원인을 찾습니다">
-                <option value="0">지금 이 순간</option>
-                <option value="10">최근 10분</option>
-                <option value="30" selected>최근 30분</option>
-                <option value="60">최근 1시간</option>
+              <select id="diag-period" class="diag-period" title="알림·사건에서 들어오면 사건 시작 5분 전부터 지금까지로 자동으로 맞춰집니다">
+                <option value="0" selected>지금 이 순간</option>
+                <option value="30">최근 30분</option>
               </select>
               <button class="diag-btn" id="diag-btn" onclick="runDiagnose()">
                 AI 진단 실행
@@ -788,7 +786,7 @@
         <div class="m-safe">
           • 실행 직전에 Agent가 PID·이름·시작 시각을 다시 확인하고, 하나라도 다르면 실행하지 않습니다.<br />
           • 30초 안에 Agent가 명령을 가져가지 않으면 자동으로 취소됩니다.<br />
-          • 누가·언제·무엇을 실행했는지는 처리 내역의 조치 이력에 남습니다.
+          • 누가·언제·무엇을 실행했고 결과가 어땠는지는 관련 알림의 처리 내역에 자동으로 남습니다.
         </div>
         <div class="m-btns">
           <button onclick="closeConfirm()">취소</button>
@@ -849,11 +847,15 @@
           '<div style="color:#9098aa;padding:20px;">AI가 최근 이력을 보고 진단 중입니다...</div>';
         try {
           const serverId = document.getElementById("diag-server").value;
-          const minutes = Number(document.getElementById("diag-period").value);
+          const period = document.getElementById("diag-period").value;
+          // "since:<epoch ms>" = 사건 기준 구간 (사건 시작 5분 전 ~ 지금)
+          const req = period.startsWith("since:")
+            ? { serverId: serverId || null, since: Number(period.slice(6)) }
+            : { serverId: serverId || null, minutes: Number(period) };
           const res = await fetch("/api/ai/diagnose", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ serverId: serverId || null, minutes }),
+            body: JSON.stringify(req),
           });
           const data = await res.json();
           if (!data.ok) {
@@ -909,7 +911,7 @@
               .join("")
           : `<tr><td colspan="7" style="color:#9098aa;padding:12px 8px">최근 ${data.minutes}분 동안 새로 생기거나 크게 늘어난 프로세스가 없습니다.</td></tr>`;
         return `<div class="sec">
-          <div class="sec-h">최근 ${data.minutes}분에 있었던 일 <span class="sub">프로세스 변화는 코드가 1분 이력으로 계산하고, 설명은 AI가 씁니다</span></div>
+          <div class="sec-h">${data.eventStart ? `사건 구간 (${hx(String(data.eventStart).slice(11, 16))} 시작 · 5분 전부터 지금까지 ${data.minutes}분)` : `최근 ${data.minutes}분`}에 있었던 일 <span class="sub">프로세스 변화는 코드가 1분 이력으로 계산하고, 설명은 AI가 씁니다</span></div>
           ${d.timeline ? `<div class="timeline-box">🕒 ${hx(d.timeline)}</div>` : ""}
           <div class="sec-h" style="margin-bottom:6px">서버 CPU ${spark(trend, 1, "#3f6ad8", 220, 34)} <span class="sub">메모리</span> ${spark(trend, 2, "#2e9e52", 120, 34)}</div>
           <div class="sus-wrap"><table class="sus-table">
@@ -1069,19 +1071,30 @@
             box.innerHTML = `<div class="act-result wait">${STEP[c.status]}</div>`;
           } else if (c) {
             const ok = c.status === "DONE" || c.status === "SIMULATED";
-            box.innerHTML = `<div class="act-result ${ok ? "ok" : "fail"}">${ok ? "✔" : "✖"} ${hx(c.message)}<br>
-              ${ok ? "부하가 내려가면 알람은 자동으로 해제됩니다. " : ""}<a href="${alertsLink()}">알림 내역에서 처리 기록 남기기 →</a></div>`;
+            const rec = c.recordedAlarms
+              ? `이 결과는 관련 알림 ${c.recordedAlarms}건의 <a href="/alerts/handled">처리 내역</a>에 '점검 중'으로 자동 기록했습니다.`
+              : "관련된 처리 대기 알림이 없어 처리 기록은 남기지 않았습니다.";
+            box.innerHTML = `<div class="act-result ${ok ? "ok" : "fail"}">${ok ? "✔" : "✖"} ${hx(c.message)}<br>${rec}<br>
+              ${ok ? "부하가 내려가면 알람은 자동으로 해제됩니다. 마무리는 " : ""}<a href="${alertsLink()}">알림 내역에서 '완료' 기록 남기기 →</a></div>`;
             return;
           }
           await new Promise((r) => setTimeout(r, 1000));
         }
-        box.innerHTML = '<div class="act-result fail">결과를 확인하지 못했습니다. 처리 내역의 조치 이력을 확인해 주세요.</div>';
+        box.innerHTML = '<div class="act-result fail">결과를 확인하지 못했습니다. 처리 내역에서 조치 기록을 확인해 주세요.</div>';
       }
 
       // 진단할 서버 목록 (온라인 서버만 선택 가능). 주소에 ?serverId=가 있으면 처음 한 번 그 서버를 고른다
       const params = new URLSearchParams(location.search);
       let wantServer = params.get("serverId");
       if (params.get("minutes") != null) document.getElementById("diag-period").value = params.get("minutes");
+      // 알림·사건에서 들어오면(?since=사건 시작 epoch ms) 구간을 "사건 시작 5분 전 ~ 지금"으로 자동 선택
+      if (params.get("since")) {
+        const t = new Date(Number(params.get("since")));
+        const hm = String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0");
+        const sel = document.getElementById("diag-period");
+        sel.insertAdjacentHTML("afterbegin", `<option value="since:${Number(params.get("since"))}">사건 구간 (${hm} 시작 · 5분 전부터)</option>`);
+        sel.selectedIndex = 0;
+      }
       async function loadServerOptions() {
         const sel = document.getElementById("diag-server");
         const prev = wantServer || sel.value;
