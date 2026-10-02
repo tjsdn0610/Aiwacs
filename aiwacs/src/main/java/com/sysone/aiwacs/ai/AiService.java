@@ -139,14 +139,25 @@ public class AiService {
                 fails.add("임계치 값을 이해하지 못했습니다.");
                 continue;
             }
+            // AI가 고객사를 "전체"로 넓혔는데 사용자가 고객사 이름을 말했다면, 그 고객사로만 좁힌다
+            // (예: "테라넷 정책 전부"를 AI가 company "*"로 잘못 옮겨도 ABC 정책은 바뀌지 않게 — 범위 결정은 코드가)
+            List<String> companies = List.of(company);
+            if (company.isBlank() || PolicyService.ALL.equals(company)) {
+                List<String> named = policyService.companies().stream().filter(userMsg::contains).toList();
+                if (!named.isEmpty()) {
+                    companies = named;
+                }
+            }
             // "*"(전체/고객사 전체)면 여러 정책이 한 번에 바뀌므로 결과도 여러 건
-            for (ChangeResult r : policyService.changeThreshold(
-                    company,
-                    policy,
-                    cmd.path("metric").asString(null),
-                    toLevelCode(cmd.path("level").asString("")),
-                    value)) {
-                (r.ok() ? changes : fails).add(r.message());
+            for (String c : companies) {
+                for (ChangeResult r : policyService.changeThreshold(
+                        c,
+                        policy,
+                        cmd.path("metric").asString(null),
+                        toLevelCode(cmd.path("level").asString("")),
+                        value)) {
+                    (r.ok() ? changes : fails).add(r.message());
+                }
             }
         }
 

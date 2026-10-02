@@ -922,23 +922,35 @@
       }
 
       // AI 해석 카드
+      // AI가 문장 대신 목록·객체로 답해도 글로 바꿔 보여준다 (예: 권장 조치를 {"1단계": "...", "2단계": "..."}로 줄 때)
+      // 자주 오는 영어 항목 이름·값은 한글로 (예: {"process": "...", "action": "terminate", "reason": "..."})
+      const KEY_KR = { process: "대상", action: "조치", reason: "이유", step: "단계", command: "명령" };
+      const VAL_KR = { terminate: "정상 종료", renice: "우선순위 낮추기", none: "그대로 두기" };
+      function asText(v) {
+        if (v == null) return "";
+        if (Array.isArray(v)) return v.map(asText).filter(Boolean).join("\n");
+        if (typeof v === "object")
+          return Object.entries(v).map(([k, x]) => (/^\d+$/.test(k) ? "" : (KEY_KR[k] || k) + ": ") + asText(x)).join("\n");
+        return VAL_KR[v] || String(v);
+      }
+      const hxt = (v) => hx(asText(v)).replace(/\n/g, "<br>");
+
       function diagHtml(d) {
         const levelColor = ["주의", "경고", "위험", "장애"].includes(d.level) ? "st-" + d.level : "st-정상";
-        const causes = Array.isArray(d.causes) ? d.causes.map((c) => `<li>${hx(c)}</li>`).join("") : "";
+        const causes = (Array.isArray(d.causes) ? d.causes : d.causes ? [d.causes] : []).map((c) => `<li>${hxt(c)}</li>`).join("");
         const correlationHtml = d.correlation
-          ? `<div class="diag-correlation"><div class="corr-label">🔗 상관관계 분석</div><div class="corr-text">${hx(d.correlation)}</div></div>`
+          ? `<div class="diag-correlation"><div class="corr-label">🔗 상관관계 분석</div><div class="corr-text">${hxt(d.correlation)}</div></div>`
           : "";
         return `<div class="diag-card" style="margin-top:16px">
         <span class="diag-level ${levelColor}">AI 진단: ${hx(d.level)}</span>
-        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${hx(d.summary)}</div></div>
+        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${hxt(d.summary)}</div></div>
         ${correlationHtml}
         <div class="diag-row"><div class="r-label">가능성 있는 원인</div><ul>${causes}</ul></div>
-        <div class="diag-row"><div class="r-label">확인 방법</div><div class="r-text">${hx(d.check)}</div></div>
-        <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${hx(d.action)}</div></div>
+        <div class="diag-row"><div class="r-label">확인 방법</div><div class="r-text">${hxt(d.check)}</div></div>
+        <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${hxt(d.action)}</div></div>
       </div>`;
       }
 
-      // 조치 제안: AI 추천 + 대상 선택 + [정상 종료] [우선순위 낮추기] [그대로 두기]
       function actionHtml(data) {
         const rec = data.recommendation || { action: "none" };
         const running = (data.candidates || []).filter((c) => c.running);
