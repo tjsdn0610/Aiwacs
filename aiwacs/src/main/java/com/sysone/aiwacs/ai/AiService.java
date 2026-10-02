@@ -43,7 +43,7 @@ public class AiService {
         this.alarmService = alarmService;
     }
 
-    // ===== AI 임계치 변경 (기업+정책 지정, 여러 개 동시 가능) =====
+    // ===== AI 정책 설정: 임계치 변경(여러 개 동시, "*"로 전체/고객사 전체 일괄) + 정책 추가 + 정책 삭제(확인 후) =====
     public Map<String, Object> changeThreshold(String userMsg) {
         if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", NOT_CONFIGURED);
@@ -54,7 +54,7 @@ public class AiService {
                 .toList();
 
         String prompt = """
-                너는 서버 모니터링 시스템의 임계치 설정을 돕는 도우미다.
+                너는 서버 모니터링 시스템의 알림 정책(임계치) 설정을 돕는 도우미다.
                 사용자의 명령을 아래 JSON 배열 형식으로만 변환해라. 다른 말은 절대 하지 마라.
 
                 현재 등록된 정책 목록:
@@ -62,14 +62,27 @@ public class AiService {
 
                 형식 (항상 배열로 답해라. 변경이 하나여도 배열 안에 하나 넣어라):
                 [
-                  {"company": "기업명", "policy": "정책명", "metric": "cpu|memory|disk", "level": "caution|warning|danger|critical", "value": 숫자}
+                  {"action": "update", "company": "기업명", "policy": "정책명", "metric": "cpu|memory|disk", "level": "주의|경고|위험|장애", "value": 숫자}
                 ]
+                action: 임계치 변경은 "update", 새 정책 만들기는 "create", 정책 지우기는 "delete"
+                - create: {"action": "create", "company": "기업명", "policy": "새 정책명"}
+                  임계치도 함께 말했으면 create 뒤에 그 새 정책에 대한 update를 이어서 넣어라
+                  예) "테라넷에 캐시서버 정책 만들어줘, CPU 경고 75" →
+                      [{"action": "create", "company": "테라넷", "policy": "캐시서버 정책"},
+                       {"action": "update", "company": "테라넷", "policy": "캐시서버 정책", "metric": "cpu", "level": "경고", "value": 75}]
+                - delete: {"action": "delete", "company": "기업명", "policy": "정책명"} (metric/level/value 없음)
+                  사용자가 정책 이름을 말하지 않았으면 policy는 ""로 둬라 (임의로 고르지 마라)
 
                 규칙:
                 - 사용자가 여러 항목을 한 번에 바꾸라고 하면, 각각을 배열의 원소로 만들어라
                 - company/policy: 위 목록에서 가장 일치하는 것을 골라라 (오타나 구어체도 최대한 매칭)
+                - 여러 정책을 한 번에: "모든/전체 정책"이면 company와 policy를 둘 다 "*"로,
+                  한 기업의 모든 정책("○○ 정책 전부")이면 company는 기업명, policy는 "*"로 해라 (정책을 하나씩 나열하지 마라)
+                  예) "모든 정책 CPU 장애 96%%로" → [{"company": "*", "policy": "*", "metric": "cpu", "level": "장애", "value": 96}]
+                  예) "(기업명) 정책 전부 메모리 위험 93" → [{"company": "(기업명)", "policy": "*", "metric": "memory", "level": "위험", "value": 93}]
+                  "전체/모든"이라고 하면 특정 기업을 고르지 말고 company도 반드시 "*"로 해라
                 - metric: CPU는 "cpu", 메모리는 "memory", 디스크는 "disk"
-                - level: 주의는 "caution", 경고는 "warning", 위험은 "danger", 장애(심각/크리티컬)는 "critical"
+                - level: 사용자가 말한 단어 그대로 "주의", "경고", "위험", "장애" 중 하나 (심각/크리티컬은 "장애")
                 - value: 퍼센트 숫자만 (0~100)
                 - 명령을 전혀 이해할 수 없으면 [{"error": "이해할 수 없는 명령입니다"}]
 
@@ -99,6 +112,7 @@ public class AiService {
 
         List<String> changes = new ArrayList<>();
         List<String> fails = new ArrayList<>();
+        List<Map<String, Object>> confirms = new ArrayList<>(); // 삭제 확인 요청 (화면에 [삭제]/[취소] 버튼)
         for (JsonNode cmd : commands) {
             if (!cmd.isObject()) {
                 fails.add("잘못된 명령 형식입니다.");
@@ -108,29 +122,70 @@ public class AiService {
                 fails.add(cmd.path("error").asString(""));
                 continue;
             }
+            String action = cmd.path("action").asString("update");
+            String company = cmd.path("company").asString("");
+            String policy = cmd.path("policy").asString("");
+            if ("create".equals(action)) {
+                ChangeResult r = policyService.createPolicy(company, policy);
+                (r.ok() ? changes : fails).add(r.message());
+                continue;
+            }
+            if ("delete".equals(action)) {
+                // AI 명령으로는 지우지 않는다 → 영향 받는 서버를 보여주고, 사용자가 [삭제]를 눌러야 지운다
+                PolicyService.DeletePlan plan = policyService.planDelete(company, policy);
+                if (plan.ok()) {
+                    confirms.add(Map.of("policyId", plan.policyId(), "text", plan.message()));
+                } else {
+                    fails.add(plan.message());
+                }
+                continue;
+            }
             Integer value = toPercent(cmd.path("value"));
             if (value == null) {
                 fails.add("임계치 값을 이해하지 못했습니다.");
                 continue;
             }
-            ChangeResult r = policyService.changeThreshold(
-                    cmd.path("company").asString(""),
-                    cmd.path("policy").asString(""),
+            // "*"(전체/고객사 전체)면 여러 정책이 한 번에 바뀌므로 결과도 여러 건
+            for (ChangeResult r : policyService.changeThreshold(
+                    company,
+                    policy,
                     cmd.path("metric").asString(null),
-                    cmd.path("level").asString(null),
-                    value);
-            (r.ok() ? changes : fails).add(r.message());
+                    toLevelCode(cmd.path("level").asString("")),
+                    value)) {
+                (r.ok() ? changes : fails).add(r.message());
+            }
         }
 
         // 응답 메시지 조립
-        if (!changes.isEmpty() && fails.isEmpty()) {
-            return Map.of("ok", true, "reply", "다음 항목을 변경했습니다:\n" + bullets(changes));
-        }
+        List<String> parts = new ArrayList<>();
         if (!changes.isEmpty()) {
-            return Map.of("ok", true, "reply",
-                    "일부 변경했습니다:\n" + bullets(changes) + "\n\n처리 못한 항목:\n" + bullets(fails));
+            parts.add((fails.isEmpty() ? "다음 항목을 처리했습니다:\n" : "일부 처리했습니다:\n") + bullets(changes));
         }
-        return Map.of("ok", false, "reply", fails.isEmpty() ? "변경할 항목을 찾지 못했습니다." : String.join(" ", fails));
+        if (!fails.isEmpty()) {
+            parts.add(changes.isEmpty() && confirms.isEmpty() && fails.size() == 1
+                    ? fails.get(0)
+                    : "처리 못한 항목:\n" + bullets(fails));
+        }
+        if (parts.isEmpty() && confirms.isEmpty()) {
+            parts.add("처리할 항목을 찾지 못했습니다.");
+        }
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("ok", !changes.isEmpty() || !confirms.isEmpty());
+        resp.put("reply", String.join("\n\n", parts));
+        resp.put("confirm", confirms);
+        return resp;
+    }
+
+    /**
+     * AI가 준 레벨(한글)을 코드값으로 변환. 작은 모델이 한글→영어 번역에서 위험/장애를 헷갈려서
+     * AI에게는 한글 그대로 받고, 변환은 코드가 한다. (영어로 와도 그대로 통과)
+     */
+    private static final Map<String, String> LEVEL_CODE =
+            Map.of("주의", "caution", "경고", "warning", "위험", "danger", "장애", "critical");
+
+    private static String toLevelCode(String level) {
+        String l = level.trim();
+        return LEVEL_CODE.getOrDefault(l, l);
     }
 
     /** AI가 준 value를 정수 퍼센트로 변환 (숫자 또는 "80", "80%" 같은 문자열 허용) */

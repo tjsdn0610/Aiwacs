@@ -85,6 +85,19 @@ public class PolicyService {
     }
 
     /**
+     * 화면 표시용 목록: 고객사별로 모아서 (고객사는 처음 등록된 순, 같은 고객사 안에서는 등록 순).
+     * 새 정책을 추가해도 맨 아래가 아니라 자기 고객사 묶음 안에 보인다.
+     * 판정용 순서(고객사 첫 번째 정책 = 기본)는 findAll() 그대로 쓴다.
+     */
+    public List<Policy> findAllGroupedByCompany() {
+        Map<String, List<Policy>> byCompany = new LinkedHashMap<>();
+        for (Policy p : findAll()) {
+            byCompany.computeIfAbsent(p.getCompany(), k -> new ArrayList<>()).add(p);
+        }
+        return byCompany.values().stream().flatMap(List::stream).toList();
+    }
+
+    /**
      * 정책 입력값 검사 (화면에서도 막지만 저장 직전에 코드가 한 번 더 확인한다).
      * 문제가 없으면 null, 있으면 사용자에게 보여줄 문구.
      */
@@ -146,19 +159,62 @@ public class PolicyService {
     private static final Map<String, String> LEVEL_KR =
             Map.of("caution", "주의", "warning", "경고", "danger", "위험", "critical", "장애");
 
+    /** 정책 이름 자리에 이 값이 오면 '해당 범위의 모든 정책' (고객사 자리도 같으면 전체 정책) */
+    public static final String ALL = "*";
+
     /**
-     * 임계치 한 건 변경. AI가 번역한 명령을 코드가 검증한 뒤 실제로 저장한다.
-     * 정책은 기업명·정책명이 포함되는 첫 번째 정책으로 찾는다.
+     * 임계치 변경. AI가 번역한 명령을 코드가 검증한 뒤 실제로 저장한다.
+     * - 보통: 기업명·정책명이 포함되는 첫 번째 정책 1개
+     * - 일괄: 정책명이 "*"이면 그 고객사의 모든 정책, 고객사도 "*"(또는 빈 값)이면 전체 정책
+     * 결과 문구에는 그 정책으로 실제 판정되는 서버 수를 함께 적는다 (정책 1개 변경 = 서버 N대 적용).
      */
     @Transactional
-    public ChangeResult changeThreshold(String company, String policyName, String metric, String level, int value) {
-        Policy target = findAll().stream()
-                .filter(p -> p.getCompany().contains(company) && p.getName().contains(policyName))
-                .findFirst()
-                .orElse(null);
-        if (target == null) {
-            return new ChangeResult(false, "'" + company + " " + policyName + "' 정책을 찾을 수 없습니다.");
+    public List<ChangeResult> changeThreshold(String company, String policyName, String metric, String level, int value) {
+        List<Policy> targets = findTargets(company, policyName);
+        if (targets.isEmpty()) {
+            return List.of(new ChangeResult(false, "'" + company + " " + policyName + "' 정책을 찾을 수 없습니다."));
         }
+        Map<Long, List<String>> using = serversByPolicy();
+        List<ChangeResult> results = new ArrayList<>();
+        for (Policy target : targets) {
+            ChangeResult r = changeOne(target, metric, level, value);
+            if (r.ok()) {
+                r = new ChangeResult(true, r.message() + appliedServers(using.getOrDefault(target.getId(), List.of())));
+            }
+            results.add(r);
+        }
+        return results;
+    }
+
+    /** 변경할 정책 찾기 ("*"는 일괄, 그 외는 고객사·이름이 포함되는 첫 번째 정책) */
+    private List<Policy> findTargets(String company, String policyName) {
+        String c = company == null ? "" : company.trim();
+        String n = policyName == null ? "" : policyName.trim();
+        if (ALL.equals(n)) {
+            boolean allCompanies = c.isEmpty() || ALL.equals(c);
+            return findAll().stream().filter(p -> allCompanies || p.getCompany().contains(c)).toList();
+        }
+        if (ALL.equals(c)) {
+            // 모든 고객사에서 이 이름이 들어간 정책 전부 (예: 모든 고객사의 'DB서버 정책')
+            return findAll().stream().filter(p -> p.getName().contains(n)).toList();
+        }
+        return findAll().stream()
+                .filter(p -> p.getCompany().contains(c) && p.getName().contains(n))
+                .findFirst()
+                .map(List::of)
+                .orElse(List.of());
+    }
+
+    /** " (적용 서버 3대: rocky-01, rocky-02, web-01)" — 이름은 최대 5개까지만 */
+    private static String appliedServers(List<String> names) {
+        if (names.isEmpty()) {
+            return " (현재 이 정책으로 판정되는 서버 없음)";
+        }
+        String shown = String.join(", ", names.subList(0, Math.min(5, names.size())));
+        return " (적용 서버 " + names.size() + "대: " + shown + (names.size() > 5 ? " 외" : "") + ")";
+    }
+
+    private ChangeResult changeOne(Policy target, String metric, String level, int value) {
         if (metric == null || !METRIC_KR.containsKey(metric) || !LEVEL_KR.containsKey(level)) {
             return new ChangeResult(false, "해당 항목을 찾을 수 없습니다.");
         }
@@ -174,7 +230,8 @@ public class PolicyService {
         Integer old = th.get(level);
         Threshold updated = th.with(level, value);
         if (!updated.isOrdered()) {
-            return new ChangeResult(false, METRIC_KR.get(metric) + " " + LEVEL_KR.get(level) + " " + value
+            return new ChangeResult(false, "[" + target.getCompany() + "] " + target.getName() + " · "
+                    + METRIC_KR.get(metric) + " " + LEVEL_KR.get(level) + " " + value
                     + "%는 레벨 순서(주의 ≤ 경고 ≤ 위험 ≤ 장애)에 맞지 않아 저장하지 않았습니다. (현재 "
                     + th.getCaution() + "/" + th.getWarning() + "/" + th.getDanger() + "/" + th.getCritical() + "%)");
         }
@@ -186,6 +243,82 @@ public class PolicyService {
         repository.save(target);
         return new ChangeResult(true, "[" + target.getCompany() + "] " + target.getName() + " · "
                 + METRIC_KR.get(metric) + " " + LEVEL_KR.get(level) + " " + old + "% → " + value + "%");
+    }
+
+    /** 정책 id → 그 정책으로 실제 판정되는 서버 이름들 (policyFor와 같은 규칙) */
+    public Map<Long, List<String>> serversByPolicy() {
+        List<Policy> all = findAll();
+        Map<Long, List<String>> out = new LinkedHashMap<>();
+        for (MonitoredServer s : serverRepository.findAllByOrderByIdAsc()) {
+            resolve(s.getPolicyId(), s.getCompany(), all)
+                    .ifPresent(p -> out.computeIfAbsent(p.getId(), k -> new ArrayList<>()).add(s.label()));
+        }
+        return out;
+    }
+
+    /**
+     * AI 명령으로 정책 추가. 값은 기본값(화면에서 '정책 추가'할 때와 같음)으로 시작하고,
+     * 임계치를 함께 말했다면 AI가 뒤이어 보내는 변경 명령으로 바뀐다.
+     */
+    @Transactional
+    public ChangeResult createPolicy(String company, String name) {
+        String c = company == null ? "" : company.trim();
+        String n = name == null ? "" : name.trim();
+        if (c.isEmpty() || n.isEmpty() || ALL.equals(c) || ALL.equals(n)) {
+            return new ChangeResult(false, "새 정책은 고객사와 정책 이름을 하나씩 정확히 말해 주세요.");
+        }
+        boolean exists = findAll().stream().anyMatch(p -> p.getCompany().equals(c) && p.getName().equals(n));
+        if (exists) {
+            return new ChangeResult(false, "[" + c + "] " + n + "은(는) 이미 있는 정책입니다.");
+        }
+        repository.save(new Policy(c, n, defaultCpu(), defaultMemory(), defaultDisk()));
+        return new ChangeResult(true, "새 정책 추가: [" + c + "] " + n
+                + " (기본값으로 생성, 서버 지정은 장비 목록 또는 정책 화면에서)");
+    }
+
+    /** 삭제 확인 정보. AI 명령으로는 바로 지우지 않고, 사용자가 버튼을 눌러야 기존 삭제 API로 지운다. */
+    public record DeletePlan(boolean ok, String message, Long policyId) {}
+
+    public DeletePlan planDelete(String company, String name) {
+        String c = company == null ? "" : company.trim();
+        String n = name == null ? "" : name.trim();
+        if (ALL.equals(c) || ALL.equals(n) || (c.isEmpty() && n.isEmpty())) {
+            return new DeletePlan(false, "정책 삭제는 한 번에 하나씩, 정책 이름을 정확히 말해 주세요.", null);
+        }
+        List<Policy> all = findAll();
+        List<Policy> matched = all.stream().filter(p -> p.getCompany().contains(c) && p.getName().contains(n)).toList();
+        if (matched.isEmpty()) {
+            return new DeletePlan(false, "'" + c + " " + n + "' 정책을 찾을 수 없습니다.", null);
+        }
+        if (matched.size() > 1) {
+            return new DeletePlan(false, "여러 정책이 일치합니다: "
+                    + String.join(", ", matched.stream().map(p -> "[" + p.getCompany() + "] " + p.getName()).toList())
+                    + " — 어느 정책인지 이름을 정확히 말해 주세요.", null);
+        }
+        if (all.size() == 1) {
+            return new DeletePlan(false, "마지막 남은 정책은 삭제할 수 없습니다. (판정 기준이 없어집니다)", null);
+        }
+        Policy target = matched.get(0);
+        // 삭제 후 각 서버가 어떤 정책으로 판정될지 (policyFor와 같은 규칙으로 미리 계산)
+        List<Policy> rest = all.stream().filter(p -> !p.getId().equals(target.getId())).toList();
+        Map<String, List<String>> moveTo = new LinkedHashMap<>();
+        for (MonitoredServer s : serverRepository.findAllByOrderByIdAsc()) {
+            Optional<Policy> now = resolve(s.getPolicyId(), s.getCompany(), all);
+            if (now.isPresent() && now.get().getId().equals(target.getId())) {
+                Long keep = target.getId().equals(s.getPolicyId()) ? null : s.getPolicyId();
+                resolve(keep, s.getCompany(), rest).ifPresent(p -> moveTo
+                        .computeIfAbsent("[" + p.getCompany() + "] " + p.getName(), k -> new ArrayList<>()).add(s.label()));
+            }
+        }
+        StringBuilder msg = new StringBuilder("정책 삭제: [" + target.getCompany() + "] " + target.getName() + " — 삭제할까요?");
+        if (moveTo.isEmpty()) {
+            msg.append("\n현재 이 정책으로 판정되는 서버는 없습니다.");
+        } else {
+            moveTo.forEach((pol, names) -> msg.append("\n· 서버 ").append(names.size()).append("대(")
+                    .append(String.join(", ", names.subList(0, Math.min(5, names.size()))))
+                    .append(names.size() > 5 ? " 외" : "").append(")는 삭제 후 ").append(pol).append("으로 판정됩니다."));
+        }
+        return new DeletePlan(true, msg.toString(), target.getId());
     }
 
     public record AssignResult(boolean ok, int assigned, int released, List<String> skipped) {}
@@ -239,21 +372,25 @@ public class PolicyService {
      * 3) 고객사가 없거나 고객사 정책이 없으면 전체 첫 번째 정책
      */
     public Optional<Policy> policyFor(Long policyId, String company) {
+        return resolve(policyId, company, findAll());
+    }
+
+    private static Optional<Policy> resolve(Long policyId, String company, List<Policy> all) {
         if (policyId != null) {
-            Optional<Policy> assigned = repository.findById(policyId);
+            Optional<Policy> assigned = all.stream().filter(p -> policyId.equals(p.getId())).findFirst();
             if (assigned.isPresent()) {
                 return assigned;
             }
         }
         if (company != null) {
-            Optional<Policy> companyDefault = findAll().stream()
+            Optional<Policy> companyDefault = all.stream()
                     .filter(p -> company.equals(p.getCompany()))
                     .findFirst();
             if (companyDefault.isPresent()) {
                 return companyDefault;
             }
         }
-        return defaultPolicy();
+        return all.stream().findFirst();
     }
 
     /** 고객사 목록 (정책에 등록된 고객사, 등록 순) */

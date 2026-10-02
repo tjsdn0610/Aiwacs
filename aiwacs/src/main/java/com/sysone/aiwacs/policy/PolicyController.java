@@ -27,7 +27,7 @@ public class PolicyController {
 
     @GetMapping
     public Map<String, Object> list() {
-        return Map.of("policies", service.findAll());
+        return Map.of("policies", service.findAllGroupedByCompany()); // 화면에는 고객사별로 모아서
     }
 
     @PostMapping
