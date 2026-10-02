@@ -25,7 +25,7 @@
       .table-wrap { overflow-x: auto; }
       table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
       th { text-align: left; color: #9098aa; font-weight: 600; font-size: 11.5px; padding: 9px 12px; border-bottom: 1px solid #e3e6ec; white-space: nowrap; }
-      td { padding: 9px 12px; border-bottom: 1px solid #eef0f4; vertical-align: top; }
+      td { padding: 9px 12px; border-bottom: 1px solid #eef0f4; vertical-align: top; white-space: nowrap; }
       tr:last-child td { border-bottom: none; }
       td.dev { font-weight: 600; color: #232838; white-space: nowrap; }
       .mono { font-family: "Consolas", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -34,8 +34,15 @@
       .lv-경고 { background: #fbe6d6; color: #c9600a; }
       .lv-위험 { background: #fbe9e9; color: #d64545; }
       .lv-장애 { background: #f6d7d7; color: #a02020; }
-      .st-done { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; background: #e7f4ec; color: #1f9d57; }
-      .st-done::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+      .ps { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+      .ps::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+      .ps-MAINTENANCE { background: #e8effc; color: #2f52b0; }
+      .ps-COMPLETE, .ps-DONE { background: #e7f4ec; color: #1f9d57; }
+      .ps-HOLD, .ps-SIMULATED { background: #f1ecfb; color: #6b46c1; }
+      .ps-IGNORE, .ps-PENDING, .ps-SENT, .ps-EXPIRED { background: #eef0f3; color: #6b7280; }
+      .ps-FAILED { background: #fbe9e9; color: #a02020; }
+      .sub { color: #9098aa; font-size: 11.5px; }
+      .card + .card { margin-top: 16px; }
       .empty { padding: 26px; text-align: center; color: #9098aa; font-size: 12.5px; }
     </style>
   </head>
@@ -53,13 +60,25 @@
             <button class="btn ghost" onclick="load()">새로고침</button>
           </div>
           <div class="card">
-            <div class="card-head">처리 내역 <span class="cnt" id="total">0</span>건</div>
+            <div class="card-head">처리 내역 <span class="cnt" id="total">0</span>건 <span class="sub">— 같은 알림에 '조치 중 → 완료'처럼 기록이 여러 줄 쌓입니다</span></div>
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th>처리 상태</th><th>장비</th><th>고객사</th><th>지표</th><th>레벨</th><th>처리자</th><th>처리 내용</th><th>처리 시간</th><th>발생 시간</th></tr>
+                  <tr><th>처리 상태</th><th>장비</th><th>고객사</th><th>설명</th><th>레벨</th><th>처리자</th><th>처리 내용</th><th>처리 시간</th><th>발생 시간</th><th>해제 시간</th></tr>
                 </thead>
-                <tbody id="rows"><tr><td colspan="9" class="empty">불러오는 중…</td></tr></tbody>
+                <tbody id="rows"><tr><td colspan="10" class="empty">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">조치 이력 <span class="cnt" id="actTotal">0</span>건 <span class="sub">— AI 진단 화면에서 사람이 승인해 서버에 보낸 조치</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>결과</th><th>장비</th><th>프로세스</th><th>조치</th><th>승인자</th><th>결과 내용</th><th>승인 시간</th><th>완료 시간</th></tr>
+                </thead>
+                <tbody id="actRows"><tr><td colspan="8" class="empty">불러오는 중…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -70,25 +89,46 @@
     <script>
       const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const lvClass = (l) => "lv lv-" + (l || "주의");
+      const ACT_ST = { PENDING: "대기", SENT: "전달됨", DONE: "성공", FAILED: "실패", EXPIRED: "만료", SIMULATED: "시뮬레이션" };
       async function load() {
         try {
           const list = await (await fetch("/api/alarms/handled")).json();
           document.getElementById("total").textContent = list.length;
           const tb = document.getElementById("rows");
-          if (!list.length) { tb.innerHTML = '<tr><td colspan="9" class="empty">처리한 알림이 없습니다. 알림 내역에서 "선택 처리"로 기록하면 여기에 쌓입니다.</td></tr>'; return; }
-          tb.innerHTML = list.map((a) => `<tr>
-            <td><span class="st-done">완료</span></td>
+          if (!list.length) { tb.innerHTML = '<tr><td colspan="10" class="empty">처리 기록이 없습니다. 알림 내역에서 알림을 고르고 "기록 저장"을 누르면 여기에 쌓입니다.</td></tr>'; }
+          else tb.innerHTML = list.map((a) => `<tr>
+            <td><span class="ps ps-${esc(a.status)}">${esc(a.statusKr)}</span></td>
             <td class="dev">${esc(a.server)}</td>
             <td>${esc(a.company) || "-"}</td>
-            <td>${esc(a.metric)}</td>
+            <td>${esc(a.title || a.metric)}</td>
             <td><span class="${lvClass(a.level)}">${esc(a.level)}</span></td>
-            <td>${esc(a.handledBy) || "-"}</td>
-            <td style="white-space:normal;min-width:220px">${esc(a.handleNote) || '<span style="color:#b0b6c4">(내용 없음)</span>'}</td>
-            <td class="mono">${esc(a.handledAt)}</td>
+            <td>${esc(a.by) || "-"}</td>
+            <td style="white-space:normal;min-width:240px">${esc(a.note) || '<span style="color:#b0b6c4">(내용 없음)</span>'}</td>
+            <td class="mono">${esc(a.at)}</td>
             <td class="mono">${esc(a.firstAt)}</td>
+            <td class="mono">${esc(a.resolvedAt) || '<span style="color:#d64545">발생 중</span>'}</td>
           </tr>`).join("");
         } catch (e) {
-          document.getElementById("rows").innerHTML = '<tr><td colspan="9" class="empty">불러오지 못했습니다.</td></tr>';
+          document.getElementById("rows").innerHTML = '<tr><td colspan="10" class="empty">불러오지 못했습니다.</td></tr>';
+        }
+        try {
+          const acts = await (await fetch("/api/actions")).json();
+          document.getElementById("actTotal").textContent = acts.length;
+          const tb = document.getElementById("actRows");
+          tb.innerHTML = acts.length
+            ? acts.map((c) => `<tr>
+              <td><span class="ps ps-${esc(c.status)}">${esc(ACT_ST[c.status] || c.status)}</span></td>
+              <td class="dev">${esc(c.server)}</td>
+              <td>${esc(c.name)} <span class="sub">PID ${esc(c.pid)}</span></td>
+              <td>${esc(c.actionKr)}</td>
+              <td>${esc(c.by)}</td>
+              <td style="white-space:normal;min-width:240px">${esc(c.message) || "-"}</td>
+              <td class="mono">${esc(c.createdAt)}</td>
+              <td class="mono">${esc(c.doneAt) || "-"}</td>
+            </tr>`).join("")
+            : '<tr><td colspan="8" class="empty">실행한 조치가 없습니다.</td></tr>';
+        } catch (e) {
+          document.getElementById("actRows").innerHTML = '<tr><td colspan="8" class="empty">불러오지 못했습니다.</td></tr>';
         }
       }
       load();

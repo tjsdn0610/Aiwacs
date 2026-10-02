@@ -43,16 +43,21 @@ src/main/java/com/sysone/aiwacs/
 ├── server/   AgentReport, MonitoredServer(엔티티), ServerService(수신·판정·서버 수정), ServerController(/api/agent/metrics, /api/servers, /api/companies)
 ├── monitor/  MonitorController(/api/status·procs·disk·traffic ?serverId=)
 ├── history/  MetricHistory(엔티티), MetricHistoryService(1분 평균 저장·7일 보관), MetricHistoryController(/api/history?date=, /api/history/days, /api/history/recent)
+│             ProcessHistory(엔티티, 서버별 1분 프로세스 CPU 상위 8 + 메모리 상위 5), ProcessHistoryService(저장·보관), ProcessTrend(새로 등장/급증/원래 높음 계산)
 ├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·서버별 정책 결정·임계치 변경), PolicyController(/api/policies)
-├── ai/       AiClient(공통: JSON 추출·예외), OllamaClient(로컬 LLM, 사용 중), GeminiClient(사용 안 함), AiService(프롬프트), AiController(/api/ai/*)
-└── config/   WebConfig (/policy, /ai, /servers 화면 주소 연결)
-src/main/resources/static/  index.html, servers.html, policy.html, ai.html, sidebar.js(모든 화면 공통 사이드바 메뉴)
+├── alarm/    Alarm(발생/해제 + 처리 기록 여러 줄), AlarmService(3초 판정·사건 묶기·처리 기록), AlarmController(/api/alarms/active|history|handled, POST /api/alarms/handle)
+├── action/   ActionCommand, ActionService(사람이 승인한 조치 → Agent 명령 대기열, 안전 검사·만료·시뮬레이션), ActionController(/api/actions)
+├── ai/       AiClient(공통: JSON 추출·예외), OllamaClient(로컬 LLM, 사용 중), GeminiClient(사용 안 함),
+│             AiService(임계치 설정·알림 묶기), DiagnosisService(진단·조치 추천·처리 기록 초안), AiController(/api/ai/*)
+└── config/   WebConfig (/policy, /ai, /servers, /alerts, /alerts/handled 화면 주소 연결)
+src/main/resources/static/  index.html, servers.html, policy.html, ai.html, alerts.html, alerts-handled.html, sidebar.js(모든 화면 공통 사이드바 메뉴)
 docker-compose.yml           PostgreSQL (볼륨 이름 `aiwacs-pgdata`로 고정)
 
 aiwacs-agent/  (모니터링 대상 서버에 설치, Java 17+, Spring 없음)
-├── Collector.java    OSHI 수집. 변화량 지표는 직전 전송 이후 초당 값
-├── AgentMain.java    주기 전송, 끊겨도 재시도, 상태가 바뀔 때만 로그
-└── AgentConfig.java  agent.properties / 환경변수 (server.url, server.name, agent.token, interval.sec)
+├── Collector.java       OSHI 수집. 변화량 지표는 직전 전송 이후 초당 값. 프로세스는 pid·시작 시각·사용자도 보냄
+├── AgentMain.java       주기 전송, 끊겨도 재시도, 상태가 바뀔 때만 로그. 전송 응답에 실린 조치 명령을 받아 실행하고 결과를 다음 전송에 실음
+├── ActionExecutor.java  조치 실행(정상 종료 SIGTERM / renice +10만). 실행 직전 PID·이름·시작 시각 재확인, 보호 프로세스 거절
+└── AgentConfig.java     agent.properties / 환경변수 (server.url, server.name, agent.token, interval.sec, action.enabled)
 ```
 - API 응답 JSON 모양은 프론트(static HTML)가 기대하는 형식을 유지한다. 바꾸면 화면도 함께 수정해야 함.
 
@@ -91,8 +96,14 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
    - Agent ID(`agent.properties`의 server.name)는 서버 식별용으로 유지, 화면 이름만 따로 변경
 3. **알림정책** — 임계치 설정 (AiWACS와 같은 주의/경고/위험/장애 4단계, 순서 검증 + 여러 정책 + 고객사 + CRUD + 수정일자 자동 기록). 고객사 목록은 정책의 고객사에서 가져옴
 4. **AI 운영 도우미** — 탭 2개
-   - **AI 상태 진단**: 서버 선택 → 그 서버의 상태+세부지표+프로세스를 AI가 해석 (오프라인 서버는 진단 불가)
+   - **AI 상태 진단**: 서버 + 구간(지금 / 최근 10·30·60분) 선택 → 코드가 프로세스 이력으로 원인 후보(새로 등장/급증/원래 높음)를 계산하고 AI가 해석. 부하가 끝난 뒤에 눌러도 그 시간의 원인이 나옴 (오프라인 서버는 진단 불가)
+     - **조치 제안**: AI가 후보 중 하나에 정상 종료 / 우선순위 낮추기 / 그대로 두기를 *추천*만 함 → 사람이 확인 창에서 [실행]해야 명령 생성 → Agent가 다음 전송 때 가져가 실행 → 결과 표시
    - **AI 임계치 설정**: 자연어로 정책 임계치 변경 (여러 개 동시 가능)
+5. **알림 내역 / 처리 내역** (`/alerts`, `/alerts/handled`)
+   - 발생/해제(코드가 자동)와 처리(사람이 기록)는 별개. 처리 상태는 AiWACS와 같은 조치 중 / 완료 / 보류 / 무시, 한 알림에 기록이 여러 줄 쌓임
+   - **✦ AI 초안**: 선택한 알림의 경과 + 그 서버의 직전 진단 + 조치 이력으로 처리 내용 초안 작성 → 사람이 고쳐서 저장 (AI 실패 시 코드가 기본 초안)
+   - 알림은 줄이지 않는다 (피드백: 반복 알림 = "아직 처리 안 함" 신호). 사건 묶기는 원본·발생 횟수를 그대로 둔 채 '모아 보기'만
+   - 시연 흐름: 부하 → 알림 → 사건 묶어 보기 → [AI 진단·조치] → 원인 확인 → 정상 종료 승인 → 자동 해제 → 처리 기록(AI 초안) → 처리 내역
 
 ### 판정 기준 (서버별)
 - 서버에 지정한 정책 → 없으면 **그 서버 고객사의 첫 번째 정책** → 고객사도 없으면 전체 첫 번째 정책
@@ -108,7 +119,10 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - [x] VM Agent (여러 서버 모니터링, 자동 등록, 토큰 옵션)
 - [x] 정책-서버 매칭 (고객사 → 서버 → 정책), 장비 이름 변경
 - [x] 지표 이력 저장 (1분 평균, 7일 보관 `history.retention-days`) → Resource Map 날짜별 하루 그래프
-- [ ] AI 조치 실행 (프로세스 끄기/재시작 등) — 예정
+- [x] 프로세스 이력(1분) + 구간 진단 (부하가 끝난 뒤에도 원인 추적)
+- [x] AI 조치 실행 (정상 종료 / 우선순위 낮추기, 사람 승인 + Agent 허용 + 재확인 + 만료 + 시뮬레이션)
+- [x] 처리/해제 분리, 처리 상태 4종, AI 처리 기록 초안
+- [ ] 알람·조치 이력 DB 저장 (지금은 메모리 — 앱 재시작 시 초기화되므로 시연 중 재시작 금지)
 - [ ] Agent 자동 실행(systemd 서비스), Agent 로그 영어화(VM 콘솔 한글 깨짐) — 예정
 - [x] 로컬 LLM(Ollama)으로 전환 — AI 호출은 `AiClient` 뒤에 숨겨져 있어 `@Component`만 바꾸면 Gemini와 교체 가능
 
@@ -139,7 +153,11 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 3. **AI는 원인을 단정하지 않음**
    - "~일 가능성이 있습니다" 형태로만. 확인 방법·조치를 함께 제시
 4. **위험한 조치(프로세스 끄기 등)는 안전장치 필수**
-   - 승인 단계 + 시뮬레이션 스위치 (`SIMULATION=True/False`)
+   - AI는 조치 API를 부르지 않음. 화면 확인 창에서 사람이 [실행]을 눌러야만 명령 생성
+   - 그 서버 Agent가 `action.enabled=true`일 때만 실행 (기본 꺼짐 = 서버 관리자가 직접 허용)
+   - 조치는 정상 종료(SIGTERM)·우선순위 낮추기(renice +10)만. 강제 종료·셸 명령 없음
+   - 실행 직전 Agent가 PID·이름·시작 시각 재확인(PID 재사용 방지), 보호 프로세스(systemd·sshd 등·Agent 자신) 거절, 30초 내 미수신 시 만료
+   - 시뮬레이션 스위치: 본체 `action.simulation=true`(환경변수 `ACTION_SIMULATION`)면 Agent에 보내지 않고 기록만
 5. **화면과 로직 분리**
    - 프론트는 API로만 통신. 데이터를 직접 안 가짐
 6. **판정 기준은 알림정책 값을 재사용** (임의로 만들지 않음)
@@ -168,6 +186,8 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - **"AI 서버가 멈추면?"** → 503/429 자동 재시도 + 사용자 안내. 판정은 코드가 하므로 AI 장애와 무관하게 대시보드는 정상 동작
 - **"실제 AiWACS와 연동은?"** → 권한상 독립 구현, API 열리면 연동 가능
 - **AI 활용 깊이** → 단순 호출이 아니라 프롬프트 설계(역할 부여, JSON 강제, 세부지표 근거)로 통제
+- **"원격으로 프로세스를 끄는 건 위험하지 않나?"** → AI는 추천만, 실행은 사람 승인 + 서버 관리자가 Agent에서 허용해야만. 종료는 SIGTERM(정리 후 종료)만, 실행 직전 재확인·보호 프로세스·만료·전 과정 기록. 운영 정책에 따라 끌 수 있는 옵션
+- **"알림을 묶으면 처리 안 한 게 가려지지 않나?"** → 원본 알림과 발생 횟수는 그대로. 묶음은 모아 보기일 뿐이고, 목표는 알림을 줄이는 게 아니라 빨리 처리·기록하게 돕는 것 (처리 기록이 빈칸으로 남지 않게 AI 초안)
 
 ---
 
@@ -175,4 +195,5 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 
 - **VM Agent + 정책-서버 매칭 + 고객사 구조 구현** (2026-09-23). VM 1대(rocky-01) 실제 연결 확인
 - 사용자 결정: 심사자 피드백은 "하나만"이었지만 **VM 2대**로 시연하기로 함
-- 다음 할 일: 두 번째 VM 연결 → Agent 자동 실행(systemd) → (선택) AI 조치 실행
+- **진단 → 조치 → 처리 흐름 구현** (2026-10-02): 프로세스 이력·구간 진단, 사람 승인 조치(Agent 명령 통로), 처리/해제 분리 + AI 처리 기록 초안
+- 다음 할 일: Mac에서 실제 VM으로 전체 흐름 확인 (VM의 agent.properties에 `action.enabled=true`, 새 Agent jar 배포) → Agent 자동 실행(systemd)

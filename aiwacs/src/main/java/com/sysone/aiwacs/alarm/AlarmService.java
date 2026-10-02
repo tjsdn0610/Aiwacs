@@ -45,7 +45,7 @@ public class AlarmService {
 
     private final ServerService servers;
     private final AtomicLong seq = new AtomicLong();
-    /** 조건이 계속되는 중인 알람: key = serverId|metric|level (처리 완료해도 조건이 풀릴 때까지 남겨 재생성 방지) */
+    /** 조건이 계속되는 중인 알람: key = serverId|metric|level (처리해도 조건이 풀릴 때까지 같은 알람의 발생 횟수가 쌓임) */
     private final Map<String, Alarm> open = new ConcurrentHashMap<>();
     /** 전체 이력(발생/해제/처리 모두, 최신순) */
     private final ConcurrentLinkedDeque<Alarm> all = new ConcurrentLinkedDeque<>();
@@ -121,9 +121,33 @@ public class AlarmService {
         return all.stream().map(Alarm::toMap).toList();
     }
 
-    /** 처리 내역: 처리 완료된 것만 */
+    /** 처리 내역: 처리 기록 한 줄씩 (최신순). 같은 알람에 '조치 중 → 완료'처럼 여러 줄이 쌓인다. */
     public List<Map<String, Object>> handled() {
-        return all.stream().filter(a -> a.getStatus() == Alarm.Status.HANDLED).map(Alarm::toMap).toList();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Alarm a : all) {
+            for (Alarm.ProcessRecord r : a.getProcesses()) {
+                Map<String, Object> m = new LinkedHashMap<>(Alarm.recordMap(r));
+                m.put("alarmId", a.getId());
+                m.put("server", a.getServer());
+                m.put("company", a.getCompany());
+                m.put("metric", a.getMetric());
+                m.put("title", a.title());
+                m.put("level", a.getLevel());
+                m.put("alarmStatus", a.getStatus().name());
+                m.put("firstAt", Alarm.fmt(a.getFirstAt()));
+                m.put("resolvedAt", Alarm.fmt(a.getResolvedAt()));
+                m.put("atMillis", r.at().toEpochMilli());
+                rows.add(m);
+            }
+        }
+        rows.sort(Comparator.comparingLong((Map<String, Object> m) -> (long) m.get("atMillis")).reversed());
+        return rows;
+    }
+
+    /** id로 알람 찾기 (AI 처리 기록 초안용) */
+    public List<Alarm> byIds(List<Long> ids) {
+        Set<Long> set = new HashSet<>(ids);
+        return all.stream().filter(a -> set.contains(a.getId())).toList();
     }
 
     /**
@@ -173,17 +197,17 @@ public class AlarmService {
         return events;
     }
 
-    /** 선택한 알람들을 처리 완료로 기록 (조건이 계속되는 동안은 다시 생기지 않음) */
-    public int handle(List<Long> ids, String by, String note) {
-        if (ids == null || ids.isEmpty()) {
+    /** 선택한 알람들에 처리 기록 추가 (발생 중이든 해제됐든 기록 가능. 발생/해제 상태는 바뀌지 않음) */
+    public int handle(List<Long> ids, Alarm.ProcessStatus status, String by, String note) {
+        if (ids == null || ids.isEmpty() || status == null) {
             return 0;
         }
         Set<Long> set = new HashSet<>(ids);
         Instant now = Instant.now();
         int n = 0;
         for (Alarm a : all) {
-            if (set.contains(a.getId()) && a.getStatus() != Alarm.Status.HANDLED) {
-                a.handle(by == null || by.isBlank() ? "aiwacs" : by, note, now);
+            if (set.contains(a.getId())) {
+                a.process(status, by == null || by.isBlank() ? "aiwacs" : by.strip(), note, now);
                 n++;
             }
         }

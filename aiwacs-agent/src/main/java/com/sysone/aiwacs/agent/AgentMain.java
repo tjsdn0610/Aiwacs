@@ -7,8 +7,15 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -34,17 +41,33 @@ public class AgentMain {
         log("AiWACS Agent 시작 — 서버 이름: " + cfg.serverName() + ", 전송 대상: " + endpoint
                 + ", 주기: " + cfg.intervalSec() + "초");
 
+        log("조치 실행(프로세스 종료·우선순위 낮추기): " + (cfg.actionEnabled()
+                ? "허용 — AiWACS 화면에서 사람이 승인한 조치만 실행합니다"
+                : "꺼짐 (켜려면 agent.properties에 action.enabled=true)"));
+
         HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         ObjectMapper json = new ObjectMapper();
         Boolean lastOk = null; // 상태가 바뀔 때만 로그를 남겨 화면이 도배되지 않게 함
 
+        // 조치는 별도 스레드 하나에서 차례로 실행 (종료 확인에 몇 초 걸려도 지표 전송이 멈추지 않게)
+        ActionExecutor executor = new ActionExecutor();
+        ExecutorService actionThread = Executors.newSingleThreadExecutor();
+        Queue<Map<String, Object>> results = new ConcurrentLinkedQueue<>();
+
         while (true) {
+            List<Map<String, Object>> sending = new ArrayList<>();
             try {
                 Map<String, Object> data = collector.collect();
                 if (data != null) {
                     data.put("serverName", cfg.serverName());
                     data.put("hostname", collector.hostname());
                     data.put("os", collector.osName());
+                    data.put("actionEnabled", cfg.actionEnabled());
+                    // 지난번 이후 끝난 조치 결과를 이번 전송에 함께 싣는다
+                    for (Map<String, Object> r; (r = results.poll()) != null; ) {
+                        sending.add(r);
+                    }
+                    data.put("actionResults", sending);
 
                     HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(endpoint))
                             .timeout(Duration.ofSeconds(5))
@@ -61,6 +84,10 @@ public class AgentMain {
                                 : "AiWACS 전송 실패: HTTP " + resp.statusCode() + " " + resp.body());
                     }
                     lastOk = ok;
+                    if (ok) {
+                        sending.clear();
+                        receiveCommands(json, resp.body(), executor, cfg.actionEnabled(), actionThread, results);
+                    }
                 }
             } catch (Exception e) {
                 if (!Boolean.FALSE.equals(lastOk)) {
@@ -69,7 +96,29 @@ public class AgentMain {
                 }
                 lastOk = false;
             }
+            results.addAll(sending); // 전송에 실패한 조치 결과는 다음 전송 때 다시 보낸다
             Thread.sleep(cfg.intervalSec() * 1000L);
+        }
+    }
+
+    /** 지표 전송 응답에 실려 온 조치 명령을 실행 대기열에 넣는다 (AiWACS → Agent 방향의 유일한 통로) */
+    private static void receiveCommands(ObjectMapper json, String body, ActionExecutor executor, boolean enabled,
+                                        ExecutorService actionThread, Queue<Map<String, Object>> results) {
+        try {
+            JsonNode cmds = json.readTree(body).path("commands");
+            for (JsonNode c : cmds) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> cmd = json.convertValue(c, Map.class);
+                log("조치 명령 수신: " + cmd.get("action") + " " + cmd.get("name") + "(PID " + cmd.get("pid")
+                        + "), 승인자 " + cmd.get("by"));
+                actionThread.submit(() -> {
+                    Map<String, Object> r = executor.execute(cmd, enabled);
+                    log("조치 결과: " + r.get("message"));
+                    results.add(r);
+                });
+            }
+        } catch (Exception e) {
+            log("조치 명령을 읽지 못했습니다: " + e.getMessage());
         }
     }
 

@@ -15,9 +15,12 @@ import java.util.Properties;
  * server.name  (AIWACS_SERVER_NAME)  화면에 표시할 서버 이름. 기본값: 호스트명
  * agent.token  (AIWACS_AGENT_TOKEN)  AiWACS에 설정한 토큰과 같은 값. 비워두면 토큰 없이 전송
  * interval.sec (AIWACS_INTERVAL_SEC) 전송 주기(초). 기본값: 2
+ * action.enabled (AIWACS_ACTION_ENABLED) AiWACS 화면에서 사람이 승인한 조치(프로세스 종료·우선순위 낮추기)를
+ *              이 서버에서 실행할지. 기본값: false — 이 서버 관리자가 직접 켜야만 조치가 실행된다
  * </pre>
  */
-public record AgentConfig(String serverUrl, String serverName, String token, int intervalSec) {
+public record AgentConfig(String serverUrl, String serverName, String token, int intervalSec,
+                          boolean actionEnabled) {
 
     public static AgentConfig load(String defaultName) {
         Properties props = new Properties();
@@ -39,10 +42,11 @@ public record AgentConfig(String serverUrl, String serverName, String token, int
         } catch (NumberFormatException e) {
             interval = 2;
         }
+        boolean actionEnabled = Boolean.parseBoolean(get(props, "action.enabled", "AIWACS_ACTION_ENABLED", "false"));
         if (url.endsWith("/")) {
             url = url.substring(0, url.length() - 1);
         }
-        return new AgentConfig(url, name, token, interval);
+        return new AgentConfig(url, name, token, interval, actionEnabled);
     }
 
     private static String get(Properties props, String key, String envKey, String def) {

@@ -72,4 +72,21 @@ class AlarmServiceTest {
         assertEquals(0, engine.activeAlarms().size(), "정상 복귀 시 모두 해제");
         assertEquals(12, engine.history().size(), "이력에는 12건이 남음 (같은 알람이 다시 생기지 않음)");
     }
+
+    @Test
+    void 처리와_해제는_따로_기록된다() {
+        cpuAt(44);
+        List<Long> ids = engine.activeAlarms().stream().map(a -> (Long) a.get("id")).toList();
+        assertEquals(6, engine.handle(ids, Alarm.ProcessStatus.MAINTENANCE, "운영자", "stress-ng 종료 예정"));
+        assertEquals(6, engine.activeAlarms().size(), "처리해도 지표가 기준 위면 계속 발생 중 (신호를 가리지 않음)");
+
+        cpuAt(5);
+        Map<String, Object> first = engine.history().getFirst();
+        assertEquals("RESOLVED", first.get("status"), "조치 중으로 처리한 알람도 값이 내려가면 해제 시각이 남음");
+        assertEquals("MAINTENANCE", first.get("processStatus"));
+
+        engine.handle(ids, Alarm.ProcessStatus.COMPLETE, "운영자", "종료 후 정상 복귀");
+        assertEquals(12, engine.handled().size(), "알람 6건 × 기록 2번(조치 중 → 완료)");
+        assertEquals("COMPLETE", engine.history().getFirst().get("processStatus"));
+    }
 }

@@ -5,7 +5,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 발생한 알람 한 건.
@@ -16,10 +18,28 @@ import java.util.Map;
  * - 레벨마다 알람이 따로 생긴다. CPU가 장애까지 오르면 주의·경고·위험·장애 알람이 각각 열려 있고,
  *   값이 그 레벨 기준 아래로 내려가면 그 레벨 알람만 해제된다.
  * - 조건이 계속되는 동안 발생 횟수가 일정 간격(1분)마다 1씩 쌓인다.
+ *
+ * 발생/해제와 처리는 서로 다른 축이다 (실제 AiWACS도 알람 tbl_alarm_event와 처리 tbl_alarm_process_detail이 따로).
+ * - 발생/해제(status): 코드가 지표로 자동 결정. 처리했다고 해제되지 않고, 해제됐다고 처리된 것도 아니다.
+ * - 처리(processes): 사람이 남기는 기록. 한 알람에 여러 번 쌓인다 (예: 조치 중 → 완료).
  */
 public class Alarm {
 
-    public enum Status { ACTIVE, RESOLVED, HANDLED }
+    public enum Status { ACTIVE, RESOLVED }
+
+    /** AiWACS 처리 팝업과 같은 4가지 처리 상태 */
+    public enum ProcessStatus {
+        IGNORE("무시"), MAINTENANCE("조치 중"), HOLD("보류"), COMPLETE("완료");
+
+        public final String kr;
+
+        ProcessStatus(String kr) {
+            this.kr = kr;
+        }
+    }
+
+    /** 처리 기록 한 줄 */
+    public record ProcessRecord(ProcessStatus status, String note, String by, Instant at) {}
 
     /** 같은 알람이 계속될 때 발생 횟수를 1 올리는 간격 */
     static final Duration COUNT_INTERVAL = Duration.ofMinutes(1);
@@ -43,9 +63,7 @@ public class Alarm {
     private Instant resolvedAt;
     private int count;
     private Status status;
-    private String handledBy;
-    private String handleNote;
-    private Instant handledAt;
+    private final List<ProcessRecord> processes = new CopyOnWriteArrayList<>();
 
     public Alarm(long id, Long serverId, String server, String company, String resource, String metric,
                  String level, int threshold, double value, Instant now) {
@@ -83,11 +101,16 @@ public class Alarm {
         }
     }
 
-    public void handle(String by, String note, Instant now) {
-        this.status = Status.HANDLED;
-        this.handledBy = by;
-        this.handleNote = note;
-        this.handledAt = now;
+    /** 처리 기록 추가. 발생/해제 상태는 바꾸지 않는다 (값이 내려가면 코드가 따로 해제). */
+    public void process(ProcessStatus s, String by, String note, Instant now) {
+        processes.add(new ProcessRecord(s, note, by, now));
+    }
+
+    public List<ProcessRecord> getProcesses() { return processes; }
+
+    /** 마지막 처리 상태 (처리 기록이 없으면 null = 미처리) */
+    public ProcessStatus lastProcess() {
+        return processes.isEmpty() ? null : processes.getLast().status();
     }
 
     public long getId() { return id; }
@@ -99,6 +122,9 @@ public class Alarm {
     public int getCount() { return count; }
     public Instant getFirstAt() { return firstAt; }
     public Instant getLastAt() { return lastAt; }
+    public Instant getResolvedAt() { return resolvedAt; }
+    public String getCompany() { return company; }
+    public double getValue() { return value; }
     public Status getStatus() { return status; }
 
     /** "CPU User >= 30%" 처럼 AiWACS 알람 설명 형식 */
@@ -130,9 +156,25 @@ public class Alarm {
         // 지속 시간: 해제됐으면 발생~해제, 아니면 발생~지금
         m.put("durationSec", durationSec(firstAt, resolvedAt != null ? resolvedAt : Instant.now()));
         m.put("status", status.name());
-        m.put("handledBy", handledBy);
-        m.put("handleNote", handleNote);
-        m.put("handledAt", handledAt == null ? null : FMT.format(handledAt));
+        // 처리: 마지막 상태 + 전체 기록 (미처리면 processStatus = null)
+        ProcessStatus last = lastProcess();
+        m.put("processStatus", last == null ? null : last.name());
+        m.put("processStatusKr", last == null ? "미처리" : last.kr);
+        m.put("processes", processes.stream().map(Alarm::recordMap).toList());
+        return m;
+    }
+
+    public static String fmt(Instant t) {
+        return t == null ? null : FMT.format(t);
+    }
+
+    static Map<String, Object> recordMap(ProcessRecord r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("status", r.status().name());
+        m.put("statusKr", r.status().kr);
+        m.put("note", r.note());
+        m.put("by", r.by());
+        m.put("at", FMT.format(r.at()));
         return m;
     }
 }

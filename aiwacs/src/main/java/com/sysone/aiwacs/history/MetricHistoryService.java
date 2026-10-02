@@ -162,6 +162,20 @@ public class MetricHistoryService {
         }).toList();
     }
 
+    /** from 이후의 1분 평균 이력 (AI 진단 구간용). 아직 저장 전인 "지금 이 1분"도 붙인다. */
+    public List<MetricHistory> since(Long serverId, Instant from) {
+        List<MetricHistory> rows = new ArrayList<>(repository
+                .findByServerIdAndTimeGreaterThanEqualAndTimeLessThanOrderByTimeAsc(serverId, from, Instant.now().plusSeconds(60)));
+        synchronized (current) {
+            Bucket b = current.get(serverId);
+            if (b != null && !b.minute.isBefore(from)
+                    && (rows.isEmpty() || rows.getLast().getTime().isBefore(b.minute))) {
+                rows.add(b.average(serverId));
+            }
+        }
+        return rows;
+    }
+
     /** 실시간 그래프용 최근 원본 값 (오래된 순, 최대 40개) */
     public List<Map<String, Object>> recent(Long serverId) {
         List<Point> points;

@@ -415,6 +415,290 @@
         color: #2c3350;
         line-height: 1.6;
       }
+
+      /* ===== 최근 N분 원인 프로세스 (코드 계산) ===== */
+      .diag-period {
+        padding: 11px 14px;
+        margin-right: 8px;
+        border: 1px solid #e3e6ec;
+        border-radius: 24px;
+        font-size: 13px;
+        color: #3a3f52;
+        background: #fff;
+        vertical-align: middle;
+      }
+      .sec {
+        margin-top: 16px;
+        border: 1px solid #eef0f4;
+        border-radius: 10px;
+        padding: 14px 16px;
+        background: #fff;
+      }
+      .sec-h {
+        font-weight: 800;
+        font-size: 12.5px;
+        color: #3a3f52;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .sec-h .sub {
+        font-weight: 400;
+        color: #9098aa;
+        font-size: 11.5px;
+      }
+      .timeline-box {
+        background: #f3f6fd;
+        border-radius: 8px;
+        padding: 10px 12px;
+        color: #2c3350;
+        line-height: 1.6;
+        margin-bottom: 10px;
+      }
+      .sus-wrap {
+        overflow-x: auto;
+      }
+      .sus-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .sus-table th {
+        text-align: left;
+        color: #9098aa;
+        font-weight: 600;
+        font-size: 11px;
+        padding: 6px 8px;
+        border-bottom: 1px solid #e3e6ec;
+        white-space: nowrap;
+      }
+      .sus-table td {
+        padding: 7px 8px;
+        border-bottom: 1px solid #f1f3f7;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      .sus-table tr:last-child td {
+        border-bottom: none;
+      }
+      .sus-name {
+        font-weight: 700;
+        color: #232838;
+      }
+      .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 10.5px;
+        font-weight: 700;
+      }
+      .tag-NEW {
+        background: #fde8e8;
+        color: #c53030;
+      }
+      .tag-RISING {
+        background: #fdf0dc;
+        color: #b7650b;
+      }
+      .tag-STEADY {
+        background: #eef0f4;
+        color: #6b7280;
+      }
+      .tag-run {
+        background: #e7f4ec;
+        color: #1f9d57;
+      }
+      .tag-end {
+        background: #eef0f4;
+        color: #8a91a3;
+      }
+      .spark {
+        display: block;
+      }
+
+      /* ===== 조치 제안 ===== */
+      .act-sec {
+        border-color: #d6e0f7;
+        background: #fafcff;
+      }
+      .ai-rec {
+        border-left: 4px solid #3f6ad8;
+        background: #eef3fc;
+        border-radius: 0 8px 8px 0;
+        padding: 10px 12px;
+        line-height: 1.6;
+        color: #2c3350;
+        margin-bottom: 12px;
+      }
+      .ai-rec b {
+        color: #3f6ad8;
+      }
+      .act-target {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        font-size: 12.5px;
+      }
+      .act-target select {
+        padding: 7px 10px;
+        border: 1px solid #d5d9e2;
+        border-radius: 8px;
+        font-size: 12.5px;
+        font-family: inherit;
+        max-width: 100%;
+      }
+      .act-btns {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .act-btn {
+        position: relative;
+        padding: 9px 16px;
+        border-radius: 8px;
+        border: 1px solid #d5d9e2;
+        background: #fff;
+        color: #3a3f52;
+        font-size: 12.5px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .act-btn:hover:not(:disabled) {
+        background: #f2f4f8;
+      }
+      .act-btn:disabled {
+        color: #b0b6c4;
+        cursor: not-allowed;
+      }
+      .act-btn.rec {
+        border-color: #3f6ad8;
+        box-shadow: 0 0 0 2px #dbe5fb;
+      }
+      .act-btn.rec::after {
+        content: "AI 추천";
+        position: absolute;
+        top: -9px;
+        right: -6px;
+        background: #3f6ad8;
+        color: #fff;
+        font-size: 9.5px;
+        padding: 1px 6px;
+        border-radius: 8px;
+      }
+      .act-note {
+        margin-top: 10px;
+        color: #8a91a3;
+        font-size: 11.5px;
+        line-height: 1.6;
+      }
+      .act-warn {
+        margin-top: 8px;
+        color: #a0661a;
+        font-size: 12px;
+      }
+      .act-result {
+        margin-top: 12px;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 12.5px;
+        line-height: 1.6;
+      }
+      .act-result.wait {
+        background: #f3f4f7;
+        color: #5a6072;
+      }
+      .act-result.ok {
+        background: #e7f4ec;
+        color: #17683b;
+      }
+      .act-result.fail {
+        background: #fbe9e9;
+        color: #a02020;
+      }
+      .act-result a {
+        color: inherit;
+        font-weight: 700;
+      }
+
+      /* ===== 확인 창 (브라우저 confirm 대신) ===== */
+      .modal-bg {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 26, 46, 0.45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+      .modal-bg[hidden] {
+        display: none;
+      }
+      .modal {
+        background: #fff;
+        border-radius: 12px;
+        width: min(440px, calc(100vw - 32px));
+        padding: 20px 22px;
+        box-shadow: 0 12px 40px rgba(20, 26, 46, 0.25);
+      }
+      .modal h3 {
+        font-size: 15px;
+        color: #232838;
+        margin-bottom: 12px;
+      }
+      .modal .m-row {
+        display: flex;
+        gap: 10px;
+        font-size: 12.5px;
+        padding: 4px 0;
+      }
+      .modal .m-k {
+        color: #9098aa;
+        width: 64px;
+        flex-shrink: 0;
+      }
+      .modal .m-v {
+        color: #232838;
+        font-weight: 600;
+      }
+      .modal .m-safe {
+        margin-top: 12px;
+        background: #f6f7fa;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 11.5px;
+        color: #5a6072;
+        line-height: 1.7;
+      }
+      .modal .m-btns {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .modal .m-btns button {
+        padding: 8px 18px;
+        border-radius: 8px;
+        border: 1px solid #d5d9e2;
+        background: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .modal .m-btns .go {
+        background: #d64545;
+        border-color: #d64545;
+        color: #fff;
+      }
+      .modal .m-btns .go.soft {
+        background: #3f6ad8;
+        border-color: #3f6ad8;
+      }
     </style>
   </head>
   <body>
@@ -451,12 +735,18 @@
               <span class="title">AI 상태 진단</span>
               <span class="badge">NEW</span>
               <span class="sub"
-                >— 현재 서버 상태를 AI가 해석하고 살펴볼 방향을 안내합니다</span
+                >— 최근 구간의 프로세스 변화로 원인을 찾고, 조치를 제안합니다 (실행은 사람이 확인한 뒤에만)</span
               >
             </div>
             <div class="diag-body">
               <select id="diag-server" class="diag-server">
                 <option value="">서버 불러오는 중...</option>
+              </select>
+              <select id="diag-period" class="diag-period" title="부하가 이미 끝났어도 이 구간의 이력으로 원인을 찾습니다">
+                <option value="0">지금 이 순간</option>
+                <option value="10">최근 10분</option>
+                <option value="30" selected>최근 30분</option>
+                <option value="60">최근 1시간</option>
               </select>
               <button class="diag-btn" id="diag-btn" onclick="runDiagnose()">
                 AI 진단 실행
@@ -510,6 +800,24 @@
         </div>
       </div>
     </div>
+
+    <!-- 조치 확인 창: 사람이 [실행]을 눌러야만 명령이 만들어진다 -->
+    <div class="modal-bg" id="confirm" hidden onclick="if (event.target === this) closeConfirm()">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cf-title">
+        <h3 id="cf-title">조치를 실행할까요?</h3>
+        <div id="cf-rows"></div>
+        <div class="m-safe">
+          • 실행 직전에 Agent가 PID·이름·시작 시각을 다시 확인하고, 하나라도 다르면 실행하지 않습니다.<br />
+          • 30초 안에 Agent가 명령을 가져가지 않으면 자동으로 취소됩니다.<br />
+          • 누가·언제·무엇을 실행했는지는 처리 내역의 조치 이력에 남습니다.
+        </div>
+        <div class="m-btns">
+          <button onclick="closeConfirm()">취소</button>
+          <button id="cf-go" class="go" onclick="executeAction()">실행</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       // 탭 전환
       function switchTab(tab) {
@@ -534,72 +842,270 @@
       window.addEventListener("hashchange", openTabFromHash);
       openTabFromHash();
 
-      // AI 진단 실행
+      // ===== AI 진단 (최근 N분 원인 프로세스) + 조치 제안 =====
+      const hx = (s) =>
+        String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      const ACT_KR = { terminate: "정상 종료", renice: "우선순위 낮추기", none: "그대로 두기" };
+      let lastDiag = null; // 마지막 진단 응답 (조치 버튼이 참고)
+
+      // 작은 선 그래프 (series: [[시각, cpu, mem], ...], idx 1=cpu 2=mem)
+      function spark(series, idx, color, w = 96, h = 24) {
+        if (!series || series.length < 2) return '<span style="color:#b0b6c4">-</span>';
+        const step = w / (series.length - 1);
+        const pts = series
+          .map((p, i) => `${(i * step).toFixed(1)},${(h - 2 - (Math.min(100, p[idx]) / 100) * (h - 4)).toFixed(1)}`)
+          .join(" ");
+        return `<svg class="spark" width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
+      }
+
       async function runDiagnose() {
         const btn = document.getElementById("diag-btn");
         const result = document.getElementById("diag-result");
         btn.disabled = true;
         result.innerHTML =
-          '<div style="color:#9098aa;padding:20px;">AI가 진단 중입니다...</div>';
+          '<div style="color:#9098aa;padding:20px;">AI가 최근 이력을 보고 진단 중입니다...</div>';
         try {
           const serverId = document.getElementById("diag-server").value;
+          const minutes = Number(document.getElementById("diag-period").value);
           const res = await fetch("/api/ai/diagnose", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ serverId: serverId || null }),
+            body: JSON.stringify({ serverId: serverId || null, minutes }),
           });
           const data = await res.json();
           if (!data.ok) {
-            result.innerHTML = `<div style="color:#d64545;padding:20px;">${data.reply}</div>`;
+            result.innerHTML = `<div style="color:#d64545;padding:20px;">${hx(data.reply)}</div>`;
             btn.disabled = false;
             return;
           }
-
-          const names = { cpu: "CPU", memory: "메모리", disk: "디스크" };
-          // 현재 상태 카드
-          let statusHtml = '<div class="diag-status">';
-          for (const k of ["cpu", "memory", "disk"]) {
-            const s = data.status[k];
-            statusHtml += `<div class="diag-metric">
-          <div class="m-name">${names[k]}</div>
-          <div class="m-val">${s.value}%</div>
-          <div class="m-status st-${s.status}">${s.status}</div>
-        </div>`;
-          }
-          statusHtml += "</div>";
-
-          // AI 진단 카드
-          const d = data.diagnosis;
-          const levelColor = ["주의", "경고", "위험", "장애"].includes(d.level)
-            ? "st-" + d.level
-            : "st-정상";
-          const causes = Array.isArray(d.causes)
-            ? d.causes.map((c) => `<li>${c}</li>`).join("")
-            : "";
-          const correlationHtml = d.correlation
-            ? `<div class="diag-correlation"><div class="corr-label">🔗 상관관계 분석</div><div class="corr-text">${d.correlation}</div></div>`
-            : "";
-          const diagHtml = `<div class="diag-card">
-        <span class="diag-level ${levelColor}">AI 진단: ${d.level}</span>
-        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${d.summary}</div></div>
-        ${correlationHtml}
-        <div class="diag-row"><div class="r-label">가능성 있는 원인</div><ul>${causes}</ul></div>
-        <div class="diag-row"><div class="r-label">확인 방법</div><div class="r-text">${d.check}</div></div>
-        <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${d.action}</div></div>
-      </div>`;
-
-          result.innerHTML = statusHtml + diagHtml;
+          lastDiag = data;
+          result.innerHTML = statusHtml(data) + trendHtml(data) + diagHtml(data.diagnosis) + actionHtml(data);
+          selectTarget();
         } catch (e) {
+          console.log(e);
           result.innerHTML =
             '<div style="color:#d64545;padding:20px;">진단 중 오류가 발생했습니다.</div>';
         }
         btn.disabled = false;
       }
 
-      // 진단할 서버 목록 (온라인 서버만 선택 가능)
+      // 현재 상태 카드 (판정은 코드)
+      function statusHtml(data) {
+        const names = { cpu: "CPU", memory: "메모리", disk: "디스크" };
+        let html = '<div class="diag-status">';
+        for (const k of ["cpu", "memory", "disk"]) {
+          const s = data.status[k];
+          html += `<div class="diag-metric">
+          <div class="m-name">${names[k]}</div>
+          <div class="m-val">${hx(s.value)}%</div>
+          <div class="m-status st-${hx(s.status)}">${hx(s.status)}</div>
+        </div>`;
+        }
+        return html + "</div>";
+      }
+
+      // 최근 N분: 서버 추이 + 코드가 계산한 원인 후보 프로세스
+      function trendHtml(data) {
+        if (!data.minutes) return "";
+        const d = data.diagnosis || {};
+        const trend = data.trend || [];
+        const sus = data.suspects || [];
+        const rows = sus.length
+          ? sus
+              .map(
+                (s) => `<tr>
+              <td class="sus-name">${hx(s.name)}</td>
+              <td><span class="tag tag-${hx(s.type)}">${hx(s.typeKr)}</span></td>
+              <td class="mono">${hx(s.firstSeen)} ~ ${hx(s.lastSeen)}</td>
+              <td>${hx(s.startCpu)}% → <b>${hx(s.peakCpu)}%</b></td>
+              <td>${hx(s.peakMem)}%</td>
+              <td>${spark(s.series, 1, "#d64545")}</td>
+              <td>${s.running ? '<span class="tag tag-run">실행 중</span>' : '<span class="tag tag-end">종료됨</span>'}</td>
+            </tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="7" style="color:#9098aa;padding:12px 8px">최근 ${data.minutes}분 동안 새로 생기거나 크게 늘어난 프로세스가 없습니다.</td></tr>`;
+        return `<div class="sec">
+          <div class="sec-h">최근 ${data.minutes}분에 있었던 일 <span class="sub">프로세스 변화는 코드가 1분 이력으로 계산하고, 설명은 AI가 씁니다</span></div>
+          ${d.timeline ? `<div class="timeline-box">🕒 ${hx(d.timeline)}</div>` : ""}
+          <div class="sec-h" style="margin-bottom:6px">서버 CPU ${spark(trend, 1, "#3f6ad8", 220, 34)} <span class="sub">메모리</span> ${spark(trend, 2, "#2e9e52", 120, 34)}</div>
+          <div class="sus-wrap"><table class="sus-table">
+            <thead><tr><th>프로세스</th><th>구분</th><th>보인 시간</th><th>CPU (구간 시작 → 최고)</th><th>메모리 최고</th><th>CPU 추이</th><th>지금</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>
+        </div>`;
+      }
+
+      // AI 해석 카드
+      function diagHtml(d) {
+        const levelColor = ["주의", "경고", "위험", "장애"].includes(d.level) ? "st-" + d.level : "st-정상";
+        const causes = Array.isArray(d.causes) ? d.causes.map((c) => `<li>${hx(c)}</li>`).join("") : "";
+        const correlationHtml = d.correlation
+          ? `<div class="diag-correlation"><div class="corr-label">🔗 상관관계 분석</div><div class="corr-text">${hx(d.correlation)}</div></div>`
+          : "";
+        return `<div class="diag-card" style="margin-top:16px">
+        <span class="diag-level ${levelColor}">AI 진단: ${hx(d.level)}</span>
+        <div class="diag-row"><div class="r-label">요약</div><div class="r-text">${hx(d.summary)}</div></div>
+        ${correlationHtml}
+        <div class="diag-row"><div class="r-label">가능성 있는 원인</div><ul>${causes}</ul></div>
+        <div class="diag-row"><div class="r-label">확인 방법</div><div class="r-text">${hx(d.check)}</div></div>
+        <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${hx(d.action)}</div></div>
+      </div>`;
+      }
+
+      // 조치 제안: AI 추천 + 대상 선택 + [정상 종료] [우선순위 낮추기] [그대로 두기]
+      function actionHtml(data) {
+        const rec = data.recommendation || { action: "none" };
+        const running = (data.candidates || []).filter((c) => c.running);
+        const recText = `<div class="ai-rec">✦ <b>AI 추천: ${hx(ACT_KR[rec.action] || "그대로 두기")}</b>${rec.process ? ` — ${hx(rec.process)}` : ""}<br>${hx(rec.reason)}</div>`;
+        if (!running.length) {
+          return `<div class="sec act-sec"><div class="sec-h">조치</div>${recText}
+            <div class="act-result wait">지금 실행 중인 조치 대상 프로세스가 없습니다. 처리 기록만 남기면 됩니다 → <a href="${alertsLink()}">알림 내역에서 처리 기록</a></div></div>`;
+        }
+        const def = running.find((c) => c.name === rec.process) || running[0];
+        const opts = running
+          .map(
+            (c) =>
+              `<option value="${hx(c.name)}" ${c === def ? "selected" : ""}>${hx(c.name)} (PID ${hx(c.pid)} · CPU ${hx(c.cpu)}% · ${hx(c.why)})</option>`,
+          )
+          .join("");
+        return `<div class="sec act-sec"><div class="sec-h">조치 <span class="sub">AI는 추천만 합니다. 실행은 사람이 확인 창에서 [실행]을 눌러야만 됩니다</span></div>
+          ${recText}
+          <div class="act-target">대상 프로세스 <select id="act-target" onchange="selectTarget()">${opts}</select></div>
+          <div class="act-btns">
+            <button class="act-btn" data-act="terminate" onclick="openConfirm('terminate')">정상 종료</button>
+            <button class="act-btn" data-act="renice" onclick="openConfirm('renice')">우선순위 낮추기</button>
+            <button class="act-btn" data-act="none" onclick="keepAsIs()">그대로 두기</button>
+          </div>
+          <div id="act-warn" class="act-warn" hidden></div>
+          <div class="act-note">정상 종료 = 프로세스에 "정리하고 끝내라" 요청(SIGTERM) · 우선순위 낮추기 = 끄지 않고 CPU를 양보하게(nice +10)<br>
+            실행 직전에 Agent가 PID·이름·시작 시각을 다시 확인하고, 시스템 핵심 프로세스는 조치하지 않습니다.${
+              data.simulation ? "<br><b>시뮬레이션 모드</b>: 실제로 실행하지 않고 기록만 남깁니다." : ""
+            }</div>
+          <div id="act-result"></div>
+        </div>`;
+      }
+
+      function currentTarget() {
+        const sel = document.getElementById("act-target");
+        if (!sel || !lastDiag) return null;
+        return (lastDiag.candidates || []).find((c) => c.running && c.name === sel.value) || null;
+      }
+
+      // 대상이 바뀌면: AI 추천 표시 위치, 막힌 이유(보호 프로세스·Agent 미허용) 갱신
+      function selectTarget() {
+        const t = currentTarget();
+        if (!t) return;
+        const rec = lastDiag.recommendation || {};
+        const recAct = rec.process === t.name ? rec.action : null;
+        document.querySelectorAll(".act-btn").forEach((b) => {
+          b.classList.toggle("rec", b.dataset.act === recAct);
+          if (b.dataset.act !== "none") b.disabled = !!t.blocked;
+        });
+        const warn = document.getElementById("act-warn");
+        warn.hidden = !t.blocked;
+        warn.textContent = t.blocked ? "⚠ " + t.blocked : "";
+      }
+
+      function alertsLink() {
+        return "/alerts" + (lastDiag ? "?server=" + encodeURIComponent(lastDiag.server) : "");
+      }
+
+      function keepAsIs() {
+        const t = currentTarget();
+        document.getElementById("act-result").innerHTML =
+          `<div class="act-result wait">${hx(t ? t.name : "")} 프로세스를 그대로 두었습니다 (서버에 아무것도 보내지 않음). 판단을 기록하려면 → <a href="${alertsLink()}">알림 내역에서 '보류'로 처리 기록</a></div>`;
+      }
+
+      // 확인 창 (사람의 최종 승인)
+      let pendingAction = null;
+      function openConfirm(action) {
+        const t = currentTarget();
+        if (!t || t.blocked) return;
+        pendingAction = { action, target: t };
+        const rec = lastDiag.recommendation || {};
+        document.getElementById("cf-title").textContent = `${t.name}을(를) ${ACT_KR[action]}할까요?`;
+        document.getElementById("cf-rows").innerHTML = `
+          <div class="m-row"><span class="m-k">서버</span><span class="m-v">${hx(lastDiag.server)}</span></div>
+          <div class="m-row"><span class="m-k">프로세스</span><span class="m-v">${hx(t.name)} (PID ${hx(t.pid)}${t.user ? " · " + hx(t.user) : ""})</span></div>
+          <div class="m-row"><span class="m-k">지금</span><span class="m-v">CPU ${hx(t.cpu)}% · 메모리 ${hx(t.mem)}%</span></div>
+          <div class="m-row"><span class="m-k">조치</span><span class="m-v">${ACT_KR[action]}${action === "terminate" ? " (SIGTERM)" : " (nice +10, 프로세스는 계속 실행)"}</span></div>
+          ${rec.process === t.name ? `<div class="m-row"><span class="m-k">AI 근거</span><span class="m-v" style="font-weight:400">${hx(rec.reason)}</span></div>` : ""}`;
+        const go = document.getElementById("cf-go");
+        go.textContent = "실행";
+        go.className = "go" + (action === "renice" ? " soft" : "");
+        document.getElementById("confirm").hidden = false;
+      }
+      function closeConfirm() {
+        document.getElementById("confirm").hidden = true;
+        pendingAction = null;
+      }
+
+      async function executeAction() {
+        if (!pendingAction) return;
+        const { action, target } = pendingAction;
+        closeConfirm();
+        const box = document.getElementById("act-result");
+        box.innerHTML = '<div class="act-result wait">조치 요청을 보내는 중…</div>';
+        try {
+          const res = await fetch("/api/actions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              serverId: lastDiag.serverId,
+              action,
+              pid: target.pid,
+              name: target.name,
+              start: target.start,
+              reason: (lastDiag.diagnosis && lastDiag.diagnosis.summary) || "",
+            }),
+          });
+          const d = await res.json();
+          if (!d.ok) {
+            box.innerHTML = `<div class="act-result fail">실행하지 않았습니다: ${hx(d.error)}</div>`;
+            return;
+          }
+          pollAction(d.command.id);
+        } catch (e) {
+          box.innerHTML = '<div class="act-result fail">조치 요청 중 오류가 발생했습니다.</div>';
+        }
+      }
+
+      // Agent가 명령을 가져가 실행하고 결과를 보낼 때까지 확인
+      async function pollAction(id) {
+        const box = document.getElementById("act-result");
+        const STEP = { PENDING: "승인됨 — Agent가 명령을 가져가길 기다리는 중 (보통 2초 이내)…", SENT: "Agent에 전달됨 — 서버에서 실행하고 확인하는 중…" };
+        for (let i = 0; i < 90; i++) {
+          let c;
+          try {
+            c = await (await fetch("/api/actions/" + id)).json();
+          } catch (e) {
+            c = null;
+          }
+          if (c && STEP[c.status]) {
+            box.innerHTML = `<div class="act-result wait">${STEP[c.status]}</div>`;
+          } else if (c) {
+            const ok = c.status === "DONE" || c.status === "SIMULATED";
+            box.innerHTML = `<div class="act-result ${ok ? "ok" : "fail"}">${ok ? "✔" : "✖"} ${hx(c.message)}<br>
+              ${ok ? "부하가 내려가면 알람은 자동으로 해제됩니다. " : ""}<a href="${alertsLink()}">알림 내역에서 처리 기록 남기기 →</a></div>`;
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+        box.innerHTML = '<div class="act-result fail">결과를 확인하지 못했습니다. 처리 내역의 조치 이력을 확인해 주세요.</div>';
+      }
+
+      // 진단할 서버 목록 (온라인 서버만 선택 가능). 주소에 ?serverId=가 있으면 처음 한 번 그 서버를 고른다
+      const params = new URLSearchParams(location.search);
+      let wantServer = params.get("serverId");
+      if (params.get("minutes") != null) document.getElementById("diag-period").value = params.get("minutes");
       async function loadServerOptions() {
         const sel = document.getElementById("diag-server");
-        const prev = sel.value;
+        const prev = wantServer || sel.value;
         try {
           const list = await (await fetch("/api/servers")).json();
           if (!list.length) {
@@ -609,13 +1115,16 @@
           sel.innerHTML = list
             .map(
               (s) =>
-                `<option value="${s.id}" ${s.online ? "" : "disabled"}>${s.company ? "[" + s.company + "] " : ""}${s.name}${s.online ? "" : " (오프라인)"}</option>`,
+                `<option value="${s.id}" ${s.online ? "" : "disabled"}>${s.company ? "[" + hx(s.company) + "] " : ""}${hx(s.name)}${s.online ? "" : " (오프라인)"}</option>`,
             )
             .join("");
           // 이전에 고른 서버가 여전히 온라인이면 유지, 아니면 첫 온라인 서버
           const keep = list.find((s) => String(s.id) === prev && s.online);
           const first = list.find((s) => s.online);
           sel.value = keep ? keep.id : first ? first.id : "";
+          // 알림(사건)에서 "AI 진단"으로 들어왔으면 바로 진단 실행
+          if (wantServer && params.get("run") === "1" && keep) runDiagnose();
+          wantServer = null;
         } catch (e) {
           console.log(e);
         }

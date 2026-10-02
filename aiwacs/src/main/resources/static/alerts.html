@@ -42,7 +42,6 @@
       .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
       .st-ACTIVE { background: #fbe9e9; color: #d64545; }
       .st-RESOLVED { background: #eef0f3; color: #6b7280; }
-      .st-HANDLED { background: #e7f4ec; color: #1f9d57; }
       .empty { padding: 26px; text-align: center; color: #9098aa; font-size: 12.5px; }
       /* AI 묶음 */
       .grp { margin-top: 16px; }
@@ -65,6 +64,29 @@
       .loading { padding: 20px; color: #9098aa; text-align: center; }
       .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(16px); background: #232838; color: #fff; padding: 11px 20px; border-radius: 10px; font-size: 13px; opacity: 0; pointer-events: none; transition: all .28s; z-index: 50; }
       .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      /* 처리 상태 (발생/해제와 별개) */
+      .ps { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+      .ps-none { background: #fff4e5; color: #b7650b; }
+      .ps-MAINTENANCE { background: #e8effc; color: #2f52b0; }
+      .ps-COMPLETE { background: #e7f4ec; color: #1f9d57; }
+      .ps-HOLD { background: #f1ecfb; color: #6b46c1; }
+      .ps-IGNORE { background: #eef0f3; color: #6b7280; }
+      /* 처리 기록 영역 */
+      .handle { padding: 14px 16px; border-top: 1px solid #eef0f4; display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; background: #fafbfd; border-radius: 0 0 10px 10px; }
+      .handle .lbl { font-weight: 700; color: #3a3f52; font-size: 12.5px; padding-top: 8px; }
+      .handle select { font-family: inherit; font-size: 13px; border: 1px solid #d5d9e2; border-radius: 8px; padding: 8px 10px; background: #fff; }
+      .handle textarea { flex: 1; min-width: 240px; min-height: 64px; font-family: inherit; font-size: 13px; border: 1px solid #d5d9e2; border-radius: 8px; padding: 8px 11px; resize: vertical; line-height: 1.5; }
+      .handle .col { display: flex; flex-direction: column; gap: 6px; }
+      .btn.ai { background: #fff; color: #3f6ad8; border: 1px solid #b9c9f2; }
+      .btn.ai:hover { background: #eef3fc; }
+      .btn:disabled { opacity: .55; cursor: default; }
+      .sel-info { color: #3f6ad8; font-weight: 700; font-size: 12px; padding-top: 9px; }
+      .filter { display: inline-flex; align-items: center; gap: 6px; background: #eef3fc; color: #2f52b0; border-radius: 14px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+      .filter a { color: #7a8194; text-decoration: none; font-weight: 400; }
+      tr.on td { background: #f5f8ff; }
+      .ev-links { display: flex; gap: 8px; margin-top: 12px; }
+      .ev-links a, .ev-links button { font-family: inherit; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 7px; border: 1px solid #b9c9f2; background: #fff; color: #3f6ad8; text-decoration: none; cursor: pointer; }
+      .ev-links a:hover, .ev-links button:hover { background: #eef3fc; }
       @media (max-width: 720px) { .sidebar { display: none; } }
     </style>
   </head>
@@ -81,24 +103,39 @@
           <div class="bar">
             <button class="btn ghost" onclick="load()">새로고침</button>
             <button class="btn" onclick="groupActive()">AI로 사건 묶기</button>
+            <span id="filter"></span>
             <span class="grow"></span>
-            <input type="text" id="note" placeholder="처리 내용 (선택 후 입력)" />
-            <button class="btn ghost" onclick="handleSelected()">선택 처리</button>
           </div>
 
           <div class="card">
-            <div class="card-head">알림 내역 <span class="cnt" id="total">0</span>건 · 발생 중 <span class="cnt" id="activeCnt">0</span>건</div>
+            <div class="card-head">알림 내역 <span class="cnt" id="total">0</span>건 · 발생 중 <span class="cnt" id="activeCnt">0</span>건 · 미처리 <span class="cnt" id="openCnt">0</span>건</div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th><input type="checkbox" id="chkAll" onclick="toggleAll(this)" /></th>
-                    <th>상태</th><th>장비</th><th>고객사</th><th>설명</th><th>레벨</th>
+                    <th>상태</th><th>처리</th><th>장비</th><th>고객사</th><th>설명</th><th>레벨</th>
                     <th>현재값</th><th>발생 시간</th><th>최종 발생</th><th>해제 시간</th><th>지속(초)</th><th>발생횟수</th>
                   </tr>
                 </thead>
-                <tbody id="rows"><tr><td colspan="12" class="empty">불러오는 중…</td></tr></tbody>
+                <tbody id="rows"><tr><td colspan="13" class="empty">불러오는 중…</td></tr></tbody>
               </table>
+            </div>
+            <!-- 처리 기록: 발생 중이든 해제됐든 기록 가능. 발생/해제는 지표로 자동 결정되고, 처리는 사람이 남긴다 -->
+            <div class="handle">
+              <span class="lbl">처리 기록</span>
+              <select id="pstatus" title="AiWACS 처리 팝업과 같은 4가지 상태">
+                <option value="MAINTENANCE">조치 중</option>
+                <option value="COMPLETE" selected>완료</option>
+                <option value="HOLD">보류</option>
+                <option value="IGNORE">무시</option>
+              </select>
+              <textarea id="note" placeholder="처리 내용 — 알림을 고르고 ✦ AI 초안을 누르면, 진단 결과와 조치 이력으로 초안을 써 드립니다 (고쳐서 저장)"></textarea>
+              <div class="col">
+                <button class="btn ai" id="draftBtn" onclick="draft()">✦ AI 초안</button>
+                <button class="btn" onclick="handleSelected()">기록 저장</button>
+              </div>
+              <span class="sel-info" id="selInfo">선택 0건</span>
             </div>
           </div>
 
@@ -109,23 +146,49 @@
     <div class="toast" id="toast"></div>
 
     <script>
-      const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
       const lvClass = (l) => "lv lv-" + (l || "주의");
-      const stKr = { ACTIVE: "발생", RESOLVED: "해제", HANDLED: "처리완료" };
+      const stKr = { ACTIVE: "발생", RESOLVED: "해제" };
       let toastTimer;
       function toast(m) { const t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600); }
 
+      // 주소로 들어온 조건: ?server=이름 (AI 진단에서 넘어옴) / ?select=1,2,3 (사건에서 넘어옴)
+      const params = new URLSearchParams(location.search);
+      const serverFilter = params.get("server");
+      let preselect = params.get("select") ? params.get("select").split(",").map(Number) : null;
+      let preselectServer = !!serverFilter; // 처음 한 번: 그 서버의 아직 끝나지 않은(미처리·조치 중·보류) 알림을 골라 둠
+      const selected = new Set(); // 5초마다 표를 다시 그려도 선택이 유지되게 따로 보관
+      let rowsCache = [];
+
+      if (serverFilter) {
+        document.getElementById("filter").innerHTML = `<span class="filter">장비: ${esc(serverFilter)} <a href="/alerts" title="필터 해제">✕</a></span>`;
+      }
+
       async function load() {
         try {
-          const list = await (await fetch("/api/alarms/history")).json();
-          const active = list.filter((a) => a.status === "ACTIVE").length;
+          let list = await (await fetch("/api/alarms/history")).json();
+          if (serverFilter) list = list.filter((a) => a.server === serverFilter);
+          rowsCache = list;
+          if (preselect) { preselect.forEach((id) => selected.add(id)); preselect = null; }
+          if (preselectServer) { list.filter((a) => !["COMPLETE", "IGNORE"].includes(a.processStatus)).forEach((a) => selected.add(a.id)); preselectServer = false; }
+          // 목록에서 사라진 알림은 선택에서도 뺀다
+          const ids = new Set(list.map((a) => a.id));
+          [...selected].forEach((id) => { if (!ids.has(id)) selected.delete(id); });
+
           document.getElementById("total").textContent = list.length;
-          document.getElementById("activeCnt").textContent = active;
+          document.getElementById("activeCnt").textContent = list.filter((a) => a.status === "ACTIVE").length;
+          document.getElementById("openCnt").textContent = list.filter((a) => !a.processStatus).length;
           const tb = document.getElementById("rows");
-          if (!list.length) { tb.innerHTML = '<tr><td colspan="12" class="empty">발생한 알림이 없습니다. 서버에 부하가 걸리면 여기에 쌓입니다.</td></tr>'; return; }
-          tb.innerHTML = list.map((a) => `<tr>
-            <td>${a.status === "ACTIVE" ? `<input type="checkbox" class="rowchk" value="${a.id}" />` : ""}</td>
+          if (!list.length) { tb.innerHTML = '<tr><td colspan="13" class="empty">발생한 알림이 없습니다. 서버에 부하가 걸리면 여기에 쌓입니다.</td></tr>'; updateSel(); return; }
+          tb.innerHTML = list.map((a) => {
+            const last = (a.processes || []).slice(-1)[0];
+            const ps = a.processStatus
+              ? `<span class="ps ps-${a.processStatus}" title="${esc(last ? last.at + " " + last.by + ": " + (last.note || "") : "")}">${esc(a.processStatusKr)}${a.processes.length > 1 ? " · " + a.processes.length + "회" : ""}</span>`
+              : '<span class="ps ps-none">미처리</span>';
+            return `<tr class="${selected.has(a.id) ? "on" : ""}">
+            <td><input type="checkbox" class="rowchk" value="${a.id}" ${selected.has(a.id) ? "checked" : ""} onclick="toggleRow(${a.id}, this.checked)" /></td>
             <td><span class="st st-${a.status}">${stKr[a.status] || a.status}</span></td>
+            <td>${ps}</td>
             <td class="dev">${esc(a.server)}</td>
             <td>${esc(a.company) || "-"}</td>
             <td>${esc(a.title || a.metric)}</td>
@@ -136,22 +199,69 @@
             <td class="mono">${esc(a.resolvedAt) || "-"}</td>
             <td class="mono">${esc(a.durationSec)}</td>
             <td class="mono">${esc(a.count)}</td>
-          </tr>`).join("");
+          </tr>`;
+          }).join("");
+          updateSel();
         } catch (e) {
-          document.getElementById("rows").innerHTML = '<tr><td colspan="12" class="empty">불러오지 못했습니다.</td></tr>';
+          document.getElementById("rows").innerHTML = '<tr><td colspan="13" class="empty">불러오지 못했습니다.</td></tr>';
         }
       }
-      function toggleAll(el) { document.querySelectorAll(".rowchk").forEach((c) => (c.checked = el.checked)); }
-      function selectedIds() { return [...document.querySelectorAll(".rowchk:checked")].map((c) => Number(c.value)); }
+      function updateSel() {
+        document.getElementById("selInfo").textContent = `선택 ${selected.size}건`;
+        document.getElementById("chkAll").checked = rowsCache.length > 0 && rowsCache.every((a) => selected.has(a.id));
+      }
+      function toggleRow(id, on) {
+        on ? selected.add(id) : selected.delete(id);
+        const tr = document.querySelector(`.rowchk[value="${id}"]`).closest("tr");
+        tr.classList.toggle("on", on);
+        updateSel();
+      }
+      function toggleAll(el) {
+        rowsCache.forEach((a) => (el.checked ? selected.add(a.id) : selected.delete(a.id)));
+        document.querySelectorAll(".rowchk").forEach((c) => { c.checked = el.checked; c.closest("tr").classList.toggle("on", el.checked); });
+        updateSel();
+      }
+      function selectIds(ids) {
+        selected.clear();
+        ids.forEach((id) => selected.add(id));
+        load();
+        document.querySelector(".handle").scrollIntoView({ behavior: "smooth", block: "center" });
+        toast(`사건의 알림 ${ids.length}건을 선택했습니다. 처리 상태를 고르고 기록하세요.`);
+      }
+
+      // AI 처리 기록 초안: 진단 결과 + 조치 이력 + 알림 경과로 초안을 받아 입력칸에 넣는다 (저장은 사람이)
+      async function draft() {
+        const ids = [...selected];
+        if (!ids.length) { toast("초안을 쓸 알림을 선택하세요."); return; }
+        const btn = document.getElementById("draftBtn");
+        btn.disabled = true;
+        btn.textContent = "✦ 작성 중…";
+        try {
+          const d = await (await fetch("/api/ai/handle-draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, status: document.getElementById("pstatus").value }) })).json();
+          if (!d.ok) { toast(d.reply || "초안을 만들지 못했습니다."); return; }
+          document.getElementById("note").value = d.draft;
+          document.getElementById("note").focus();
+          toast(d.aiNote || (d.source === "ai" ? "AI 초안을 넣었습니다. 확인하고 고쳐서 저장하세요." : "기본 초안을 넣었습니다. 확인하고 고쳐서 저장하세요."));
+        } catch (e) {
+          toast("초안 요청 중 오류가 발생했습니다.");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "✦ AI 초안";
+        }
+      }
 
       async function handleSelected() {
-        const ids = selectedIds();
+        const ids = [...selected];
         if (!ids.length) { toast("처리할 알림을 선택하세요."); return; }
-        const note = document.getElementById("note").value;
+        const note = document.getElementById("note").value.trim();
+        if (!note) { toast("처리 내용을 입력하세요 (✦ AI 초안으로 시작할 수 있어요)."); return; }
+        const sel = document.getElementById("pstatus");
         try {
-          const d = await (await fetch("/api/alarms/handle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, note }) })).json();
-          toast(`${d.handled}건 처리했습니다.`);
+          const d = await (await fetch("/api/alarms/handle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, status: sel.value, note }) })).json();
+          if (!d.ok) { toast(d.error || "기록하지 못했습니다."); return; }
+          toast(`${d.handled}건에 '${sel.options[sel.selectedIndex].text}' 기록을 남겼습니다.`);
           document.getElementById("note").value = "";
+          selected.clear();
           load();
         } catch (e) { toast("처리 중 오류가 발생했습니다."); }
       }
@@ -178,9 +288,13 @@
                   <div class="ek">묶인 알림</div><div class="ev">${(e.members || []).map(esc).join("<br>")}</div>
                   <div class="ek">원인 추정</div><div class="ev">${esc(e.cause)}</div>
                   <div class="ek">권장 조치</div><div class="ev">${esc(e.action)}</div>
+                  <div class="ev-links">
+                    <a href="/ai?serverId=${esc(String(e.key).split("|")[0])}&minutes=30&run=1#diagnose">✦ AI 진단 · 조치</a>
+                    <button onclick='selectIds(${JSON.stringify(e.alarmIds || [])})'>이 사건 알림 선택해서 처리</button>
+                  </div>
                 </div>
               </div>`).join("")}
-              <div class="note">AiWACS 원본 ${raw}건은 그대로 두고(위 표), ${events.length}개 사건으로 묶어 보여줍니다.</div>
+              <div class="note">AiWACS 원본 ${raw}건은 그대로 두고(위 표), ${events.length}개 사건으로 묶어 보여줍니다. 발생 횟수도 그대로 쌓입니다.</div>
             </div></div>`;
         } catch (e) { grp.innerHTML = '<div class="card"><div class="empty" style="color:#a03535">묶기 중 오류가 발생했습니다.</div></div>'; }
       }

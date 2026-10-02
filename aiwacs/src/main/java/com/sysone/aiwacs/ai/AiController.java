@@ -10,15 +10,26 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** AI 운영 도우미 API (진단 / 자연어 임계치 설정) */
+import com.sysone.aiwacs.alarm.AlarmController;
+
+/** AI 운영 도우미 API (진단·조치 제안 / 처리 기록 초안 / 자연어 임계치 설정 / 알림 묶기) */
 @RestController
 @RequestMapping("/api/ai")
 public class AiController {
 
     private final AiService aiService;
+    private final DiagnosisService diagnosis;
 
-    public AiController(AiService aiService) {
+    public AiController(AiService aiService, DiagnosisService diagnosis) {
         this.aiService = aiService;
+        this.diagnosis = diagnosis;
+    }
+
+    /** 처리 기록 초안 — body: {"ids":[1,2], "status":"COMPLETE"} → {"draft": "..."} (저장은 사람이 /api/alarms/handle로) */
+    @PostMapping("/handle-draft")
+    public Map<String, Object> handleDraft(@RequestBody Map<String, Object> body) {
+        return diagnosis.handleDraft(AlarmController.parseIds(body.get("ids")),
+                String.valueOf(body.getOrDefault("status", "COMPLETE")));
     }
 
     @PostMapping("/threshold")
@@ -40,15 +51,20 @@ public class AiController {
         return aiService.groupAlarms(demo);
     }
 
+    /** 상태 진단 — body: {"serverId": 1, "minutes": 30} (minutes 0 = 지금 이 순간만) */
     @PostMapping("/diagnose")
     public Map<String, Object> diagnose(@RequestBody Map<String, Object> body) {
         Object id = body.get("serverId");
         Long serverId = null;
+        int minutes = 30;
         try {
             serverId = id == null ? null : Long.valueOf(String.valueOf(id));
+            if (body.get("minutes") != null) {
+                minutes = Integer.parseInt(String.valueOf(body.get("minutes")));
+            }
         } catch (NumberFormatException ignored) {
-            // 잘못된 값이면 null → "서버를 선택해 주세요" 안내
+            // 잘못된 값이면 서버는 null → "서버를 선택해 주세요" 안내, 구간은 기본 30분
         }
-        return aiService.diagnose(serverId);
+        return diagnosis.diagnose(serverId, minutes);
     }
 }

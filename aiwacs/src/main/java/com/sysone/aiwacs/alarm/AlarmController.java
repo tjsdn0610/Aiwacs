@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -39,11 +40,28 @@ public class AlarmController {
         return alarms.handled();
     }
 
-    /** 선택 알람 처리 완료 — body: {"ids":[1,2], "note":"...", "by":"..."} */
+    /**
+     * 선택 알람에 처리 기록 추가 — body: {"ids":[1,2], "status":"MAINTENANCE", "note":"...", "by":"..."}
+     * status: IGNORE(무시) / MAINTENANCE(조치 중) / HOLD(보류) / COMPLETE(완료). 없으면 COMPLETE.
+     */
     @PostMapping("/handle")
-    public Map<String, Object> handle(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> handle(@RequestBody Map<String, Object> body) {
+        Alarm.ProcessStatus status;
+        try {
+            status = body.get("status") == null ? Alarm.ProcessStatus.COMPLETE
+                    : Alarm.ProcessStatus.valueOf(String.valueOf(body.get("status")));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "error", "알 수 없는 처리 상태입니다."));
+        }
+        int n = alarms.handle(parseIds(body.get("ids")), status,
+                body.get("by") == null ? null : String.valueOf(body.get("by")),
+                body.get("note") == null ? "" : String.valueOf(body.get("note")));
+        return ResponseEntity.ok(Map.of("ok", true, "handled", n));
+    }
+
+    /** [1, "2", ...] → id 목록 (잘못된 값은 건너뜀) */
+    public static List<Long> parseIds(Object raw) {
         List<Long> ids = new ArrayList<>();
-        Object raw = body.get("ids");
         if (raw instanceof List<?> list) {
             for (Object o : list) {
                 try {
@@ -53,9 +71,6 @@ public class AlarmController {
                 }
             }
         }
-        int n = alarms.handle(ids,
-                body.get("by") == null ? null : String.valueOf(body.get("by")),
-                body.get("note") == null ? "" : String.valueOf(body.get("note")));
-        return Map.of("ok", true, "handled", n);
+        return ids;
     }
 }

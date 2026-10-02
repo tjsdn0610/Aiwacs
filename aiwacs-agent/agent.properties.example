@@ -14,3 +14,7 @@ agent.token=
 
 # 전송 주기(초)
 interval.sec=2
+
+# AiWACS 화면에서 사람이 승인한 조치(프로세스 정상 종료 / 우선순위 낮추기)를 이 서버에서 실행할지.
+# 기본은 꺼짐(false). 이 서버 관리자가 true로 바꿔야만 실행된다. 시스템 핵심 프로세스는 켜도 조치할 수 없다.
+action.enabled=false

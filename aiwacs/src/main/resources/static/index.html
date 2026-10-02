@@ -157,6 +157,9 @@
       .mm-card .ev-t { font-weight: 700; color: #232838; font-size: 12.5px; }
       .mm-card .ev-k { color: #9098aa; font-weight: 700; font-size: 11px; margin-top: 7px; }
       .mm-card .ev-v { color: #3a4055; font-size: 12px; }
+      .mm-card .ev-go { display: flex; gap: 6px; margin-top: 10px; }
+      .mm-card .ev-go a { font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 7px; border: 1px solid #b9c9f2; background: #fff; color: #3f6ad8; text-decoration: none; }
+      .mm-card .ev-go a:hover { background: #eef3fc; }
       .content {
         padding: 16px;
         display: grid;
@@ -1486,6 +1489,10 @@
           <div class="ev-k">사건 구간</div><div class="ev-v">${alEsc(e.firstAt)} ~ ${alEsc(e.lastAt)} · 알림 ${alEsc(e.alarmCount)}건 · 발생 횟수 합계 ${alEsc(e.occurrences)}회 (지표: ${alEsc((e.metrics || []).join(", "))})</div>
           <div class="ev-k">원인 추정 (AI)</div><div class="ev-v">${alEsc(e.cause)}</div>
           <div class="ev-k">권장 조치 (AI)</div><div class="ev-v">${alEsc(e.action)}</div>
+          <div class="ev-go">
+            <a href="/ai?serverId=${encodeURIComponent(String(e.key).split("|")[0])}&minutes=30&run=1#diagnose">✦ AI 진단 · 조치</a>
+            <a href="/alerts?select=${(e.alarmIds || []).join(",")}">처리 기록 →</a>
+          </div>
         </div>`;
       }
       loadAlarms();

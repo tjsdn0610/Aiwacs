@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.sysone.aiwacs.action.ActionService;
 import com.sysone.aiwacs.policy.PolicyService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,12 +26,14 @@ public class ServerController {
 
     private final ServerService service;
     private final PolicyService policyService;
+    private final ActionService actions;
     private final String agentToken;
 
-    public ServerController(ServerService service, PolicyService policyService,
+    public ServerController(ServerService service, PolicyService policyService, ActionService actions,
                             @Value("${agent.token:}") String agentToken) {
         this.service = service;
         this.policyService = policyService;
+        this.actions = actions;
         this.agentToken = agentToken;
     }
 
@@ -48,7 +51,10 @@ public class ServerController {
             return ResponseEntity.badRequest().body(Map.of("ok", false, "error", "invalid report"));
         }
         MonitoredServer server = service.receive(report, request.getRemoteAddr());
-        return ResponseEntity.ok(Map.of("ok", true, "serverId", server.getId()));
+        // 조치: Agent가 보낸 지난 조치 결과를 반영하고, 사람이 승인해 대기 중인 명령이 있으면 응답에 실어 보낸다
+        actions.applyResults(server.getId(), report.actionResults());
+        return ResponseEntity.ok(Map.of("ok", true, "serverId", server.getId(),
+                "commands", actions.takeCommands(server.getId())));
     }
 
     /** 모니터링 서버 목록 (온라인 여부 + 서버별 대표 상태 포함) */

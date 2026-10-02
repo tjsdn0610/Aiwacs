@@ -82,14 +82,15 @@ public class Collector {
         for (OSProcess p : os.getProcesses()) {
             snapshot.put(p.getProcessID(), p);
             OSProcess before = prevProcs.get(p.getProcessID());
-            String name = p.getName() == null || p.getName().isBlank() ? "unknown" : p.getName();
-            if (name.length() > 20) {
-                name = name.substring(0, 20);
-            }
+            String name = displayName(p);
             Map<String, Object> pm = new LinkedHashMap<>();
             pm.put("name", name);
             pm.put("cpu", round1(p.getProcessCpuLoadBetweenTicks(before) * 100));
             pm.put("mem", round1(p.getResidentMemory() * 100.0 / totalMem));
+            // 조치(종료·우선순위)할 때 "같은 프로세스"인지 확인하는 열쇠: PID + 시작 시각 (PID는 재사용될 수 있음)
+            pm.put("pid", p.getProcessID());
+            pm.put("start", p.getStartTime());
+            pm.put("user", p.getUser());
             procs.add(pm);
 
             if (before != null) {
@@ -186,6 +187,12 @@ public class Collector {
         result.put("io", io);
         result.put("topIo", ioProcs.stream().limit(5).toList());
         return result;
+    }
+
+    /** 화면에 보내는 프로세스 이름 (20자까지). 조치 실행 전 확인도 같은 이름으로 비교한다. */
+    static String displayName(OSProcess p) {
+        String name = p.getName() == null || p.getName().isBlank() ? "unknown" : p.getName();
+        return name.length() > 20 ? name.substring(0, 20) : name;
     }
 
     /** 전송량을 줄이기 위해 CPU 상위 15개 + 메모리 상위 10개만 보낸다 */

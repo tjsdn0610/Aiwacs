@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.sysone.aiwacs.history.MetricHistoryService;
+import com.sysone.aiwacs.history.ProcessHistoryService;
 import com.sysone.aiwacs.policy.Policy;
 import com.sysone.aiwacs.policy.PolicyService;
 
@@ -32,12 +33,15 @@ public class ServerService {
     private final ServerRepository repository;
     private final PolicyService policyService;
     private final MetricHistoryService history;
+    private final ProcessHistoryService processHistory;
     private final Map<Long, Snapshot> latest = new ConcurrentHashMap<>();
 
-    public ServerService(ServerRepository repository, PolicyService policyService, MetricHistoryService history) {
+    public ServerService(ServerRepository repository, PolicyService policyService, MetricHistoryService history,
+                         ProcessHistoryService processHistory) {
         this.repository = repository;
         this.policyService = policyService;
         this.history = history;
+        this.processHistory = processHistory;
     }
 
     /** 서버의 최신 지표를 "그 서버에 적용된 정책"으로 판정 */
@@ -108,6 +112,7 @@ public class ServerService {
         }
         latest.put(server.getId(), new Snapshot(report, Instant.now()));
         history.record(server.getId(), report);
+        processHistory.record(server.getId(), report);
         return server;
     }
 
