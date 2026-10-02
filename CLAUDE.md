@@ -10,7 +10,7 @@
 - **무엇**: SYSONE의 통합 모니터링 솔루션 `AiWACS`에 얹는 신규 기능 제안 프로젝트
 - **목적**: 채용연계 프로젝트. 평가 기준은 **제품 이해도 · 아이디어 · 기획** (개발 난이도가 아님. 단, 작동하는 결과물은 필요)
 - **컨셉**: "AI 운영 도우미 = 신입 담당자 옆에 앉은 선임"
-  - 상태를 진단해주고(진단), 필요하면 기준을 바꿔준다(임계치 변경)
+  - 상태를 진단해주고(진단), 필요하면 기준을 바꿔준다(정책 설정: 임계치 변경·정책 추가·삭제)
 - **핵심 명분**: AiWACS는 데이터 수집·표시·판정까지는 훌륭하나, 그 **'해석'은 사람 몫**이다. 그 해석의 공백을 AI로 채운다.
 - **심사 대상**: 이 제품(AiWACS)을 만든 회사. → 제품을 **존중하는 겸손한 제안 톤** 유지. "없다/부족하다" 같은 단정 표현 지양.
 
@@ -24,7 +24,7 @@
 - **AI**: 로컬 LLM — Ollama (모델: `gemma3:4b`, `http://localhost:11434/api/chat`, Spring RestClient로 호출). 보안상 지표가 외부로 나가지 않게 전환
   - 이전 방식 Google Gemini REST API(`GeminiClient`)는 코드를 남겨두고 `@Component`·설정만 주석 처리 (되돌릴 때 주석 해제)
   - Ollama 설치: `brew install ollama && brew services start ollama && ollama pull gemma3:4b`
-- **DB**: PostgreSQL 17 (회사 스택, Docker로 실행). 테이블: `alert_policy`(정책), `monitored_server`(서버), `metric_history`(1분 평균 지표 이력)
+- **DB**: PostgreSQL 17 (회사 스택, Docker로 실행). 테이블: `alert_policy`(정책), `monitored_server`(서버), `metric_history`(1분 평균 지표 이력), `process_history`(1분 프로세스 이력)
 - **API 키**: `aiwacs/.env` (gitignore) → `spring.config.import`로 읽음
 - **개발 도구**: VSCode (자바 확장) + 저(Claude)와 바이브 코딩
 
@@ -44,13 +44,14 @@ src/main/java/com/sysone/aiwacs/
 ├── monitor/  MonitorController(/api/status·procs·disk·traffic ?serverId=)
 ├── history/  MetricHistory(엔티티), MetricHistoryService(1분 평균 저장·7일 보관), MetricHistoryController(/api/history?date=, /api/history/days, /api/history/recent)
 │             ProcessHistory(엔티티, 서버별 1분 프로세스 CPU 상위 8 + 메모리 상위 5), ProcessHistoryService(저장·보관), ProcessTrend(새로 등장/급증/원래 높음 계산)
-├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·서버별 정책 결정·임계치 변경), PolicyController(/api/policies)
+├── policy/   Policy·Threshold(엔티티), PolicyService(CRUD·판정·서버별 정책 결정·임계치 변경·정책별 적용 서버·삭제 영향 계산), PolicyController(/api/policies — 고객사별로 묶어 반환)
 ├── alarm/    Alarm(발생/해제 + 처리 기록 여러 줄), AlarmService(3초 판정·사건 묶기·처리 기록), AlarmController(/api/alarms/active|history|handled, POST /api/alarms/handle)
 ├── action/   ActionCommand, ActionService(사람이 승인한 조치 → Agent 명령 대기열, 안전 검사·만료·시뮬레이션), ActionController(/api/actions)
 ├── ai/       AiClient(공통: JSON 추출·예외), OllamaClient(로컬 LLM, 사용 중), GeminiClient(사용 안 함),
-│             AiService(임계치 설정·알림 묶기), DiagnosisService(진단·조치 추천·처리 기록 초안), AiController(/api/ai/*)
+│             AiService(정책 설정: 임계치 변경·정책 추가/삭제 확인·알림 묶기), DiagnosisService(진단·조치 추천·처리 기록 초안), AiController(/api/ai/*)
 └── config/   WebConfig (/policy, /ai, /servers, /alerts, /alerts/handled 화면 주소 연결)
-src/main/resources/static/  index.html, servers.html, policy.html, ai.html, alerts.html, alerts-handled.html, sidebar.js(모든 화면 공통 사이드바 메뉴)
+src/main/resources/static/  index.html, servers.html, policy.html, ai.html, alerts.html, alerts-handled.html,
+                            sidebar.js(모든 화면 공통 사이드바 메뉴), topbar.js(모든 화면 공통 상단바 + 종 패널)
 docker-compose.yml           PostgreSQL (볼륨 이름 `aiwacs-pgdata`로 고정)
 
 aiwacs-agent/  (모니터링 대상 서버에 설치, Java 17+, Spring 없음)
@@ -81,10 +82,12 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 
 ## 3. 기능 명세
 
-### 화면 4개
-- 공통 사이드바(`sidebar.js`): 대시보드(요약·실시간) / AI 운영 도우미(상태 진단·임계치 변경) / 장비 목록 / ICMP … / 정책 관리(알림 정책 …) / 그룹 설정 / 환경설정. 하위 메뉴는 화살표로 펼침. 링크 없는 항목은 AiWACS 메뉴 구성 재현용 자리
+### 화면
+- 공통 사이드바(`sidebar.js`): 대시보드(요약·실시간) / AI 운영 도우미(상태 진단·정책 설정) / 장비 목록 / ICMP … / 정책 관리(알림 정책 …) / 그룹 설정 / 환경설정. 하위 메뉴는 화살표로 펼침. 링크 없는 항목은 AiWACS 메뉴 구성 재현용 자리
+- 공통 상단바(`topbar.js`): 모든 화면에 환영 문구·현재 시각·Agent/알림(종)/계정 아이콘. 화면마다 다른 것(왼쪽 경로, 대시보드의 Company 선택)은 각 화면에 두고, 화면 전용 요소는 `.topbar-right` 안에 `class="tb-extra"`로
+  - **종 패널**(어느 화면에서든): AiWACS와 같은 레벨 탭(전체/주의/경고/위험/장애) + **✦ AI 사건** 탭 = 위→아래 마인드맵(현재 알림 → 서버 → 사건(자원) → 레벨별 건수). 사건을 누르면 그 가지만 강조되고 AI 원인·조치 + [AI 진단·조치]/[처리 기록] 이동. 패널 너비(380px)는 그대로
 1. **메인 대시보드** — VM 실시간 모니터링 (AiWACS 스타일 재현)
-   - 상단 `Company ▾`로 고객사 필터, "모니터링 서버" 탭으로 서버 선택 (온라인 점 + 대표 상태)
+   - 상단 `Company ▾`(대시보드 전용)로 고객사 필터, "모니터링 서버" 탭으로 서버 선택 (온라인 점 + 대표 상태)
    - 장비 현황(전체/주의/경고/위험/장애/다운, OS별) = 서버 목록 기준 집계
    - 선택 서버의 CPU/메모리/디스크 판정, Resource Map, 프로세스 TOP5, 디스크 파티션, 트래픽
    - Resource Map: 기본은 **오늘 하루**(가로 00:00~24:00, 세로 %, 15분 단위 막대 96개 = 1분 평균 기록을 15분씩 묶은 평균, 마우스를 올리면 그 15분의 평균·최고값). 날짜 선택으로 지난 날짜(보관 7일) 조회, 기록이 없는 칸은 비움
@@ -94,11 +97,15 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 2. **장비 목록** (`/servers`) — Agent가 자동 등록한 서버 관리
    - 장비 이름(표시 이름) 변경, 고객사 지정, 적용 정책 지정 (그 고객사의 정책만 선택 가능)
    - Agent ID(`agent.properties`의 server.name)는 서버 식별용으로 유지, 화면 이름만 따로 변경
-3. **알림정책** — 임계치 설정 (AiWACS와 같은 주의/경고/위험/장애 4단계, 순서 검증 + 여러 정책 + 고객사 + CRUD + 수정일자 자동 기록). 고객사 목록은 정책의 고객사에서 가져옴
+3. **알림정책** — 임계치 설정 (AiWACS와 같은 주의/경고/위험/장애 4단계, 순서 검증 + 여러 정책 + 고객사 + CRUD + 수정일자 자동 기록). 고객사 목록은 정책의 고객사에서 가져옴. 목록은 고객사별로 묶어 표시(판정용 순서 = 등록 순은 그대로)
 4. **AI 운영 도우미** — 탭 2개
    - **AI 상태 진단**: 서버 + 구간 선택 — 메뉴에서는 지금 이 순간(기본) / 최근 30분, 알림·사건의 [진단·조치]로 들어오면 **사건 시작 5분 전 ~ 지금**으로 자동 설정(최대 180분) → 코드가 프로세스 이력으로 원인 후보(새로 등장/급증/원래 높음)를 계산하고 AI가 해석. 부하가 끝난 뒤에 눌러도 그 시간의 원인이 나옴 (오프라인 서버는 진단 불가)
      - **조치 제안**: AI가 후보 중 하나에 정상 종료 / 우선순위 낮추기 / 그대로 두기를 *추천*만 함 → 사람이 확인 창에서 [실행]해야 명령 생성 → Agent가 다음 전송 때 가져가 실행 → 결과 표시 + 그 서버의 처리 대기 알림에 "⚙ 조치" 처리 기록(점검 중)으로 자동 기록 (조치는 처리 과정 중의 행동 하나 → 기록은 처리 내역 한 곳에)
-   - **AI 임계치 설정**: 자연어로 정책 임계치 변경 (여러 개 동시 가능)
+   - **AI 정책 설정** (주소는 `/ai#threshold` 그대로): 말로 정책을 다룸. AI는 말을 JSON으로 "번역"만, 대상 찾기·검증·저장은 코드가
+     - 임계치 변경: 여러 개 동시 가능. 결과에 **적용 서버 N대(이름)** 표시 — 임계치는 서버가 아니라 정책 단위라 정책 1개 변경 = 그 정책을 쓰는 서버 전체
+     - 일괄 변경: "모든 정책 …" / "테라넷 정책 전부 …" → AI는 범위를 `*`로만 표시, 해당 정책은 코드가 찾음. AI가 고객사를 `*`로 넓혀도 사용자가 고객사 이름을 말했으면 코드가 그 고객사로 좁힘
+     - 정책 추가: 기본값으로 생성(복사 안 함), 함께 말한 임계치는 이어서 변경. 같은 이름이 있으면 거부
+     - 정책 삭제: AI 명령으로는 지우지 않음 → 삭제 후 각 서버가 어느 정책으로 판정될지 보여주고 사람이 [삭제]를 눌러야 기존 삭제 API 실행. 모호한 이름(여러 개 일치)·일괄 삭제·마지막 정책 삭제는 거부
 5. **알림 내역 / 처리 내역** (`/alerts`, `/alerts/handled`)
    - 발생/해제(코드가 자동)와 처리(사람이 기록)는 별개. 처리 상태는 AiWACS와 같은 4가지(ON MAINTENANCE=점검 중 / COMPLETE=완료 / HOLD=보류 / IGNORE=무시), 한 알림에 기록이 여러 줄 쌓임
    - **✦ AI 초안**: 선택한 알림의 경과 + 그 서버의 직전 진단 + 조치 이력으로 처리 내용 초안 작성 → 사람이 고쳐서 저장 (AI 실패 시 코드가 기본 초안)
@@ -115,7 +122,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - [x] 메인 대시보드 (실시간, 서버 선택, 고객사 필터)
 - [x] 알림정책 (여러 개 + 고객사 + CRUD)
 - [x] 임계치 → 판정 연결
-- [x] AI 임계치 변경 (자연어, 여러 개 동시)
+- [x] AI 정책 설정 (자연어 임계치 변경·여러 개 동시·전체/고객사 일괄·적용 서버 수, 정책 추가, 삭제는 사람 확인)
 - [x] AI 상태 진단 (세부지표 활용, 서버별)
 - [x] VM Agent (여러 서버 모니터링, 자동 등록, 토큰 옵션)
 - [x] 정책-서버 매칭 (고객사 → 서버 → 정책), 장비 이름 변경
@@ -123,6 +130,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - [x] 프로세스 이력(1분) + 구간 진단 (부하가 끝난 뒤에도 원인 추적)
 - [x] AI 조치 실행 (정상 종료 / 우선순위 낮추기, 사람 승인 + Agent 허용 + 재확인 + 만료 + 시뮬레이션)
 - [x] 처리/해제 분리, 처리 상태 4종, AI 처리 기록 초안
+- [x] 공통 상단바(`topbar.js`) + 종 패널 AI 사건 마인드맵, 화면 통일(사이드바 170px·이름·정책 표 정렬)
 - [ ] 알람·조치 이력 DB 저장 (지금은 메모리 — 앱 재시작 시 초기화되므로 시연 중 재시작 금지)
 - [ ] Agent 로그 영어화(VM 콘솔 한글 깨짐) — 예정
 - [x] 로컬 LLM(Ollama)으로 전환 — AI 호출은 `AiClient` 뒤에 숨겨져 있어 `@Component`만 바꾸면 Gemini와 교체 가능
@@ -137,7 +145,9 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - ※ 프롬프트에 각 지표의 뜻을 설명하고, "근거 수치를 함께 언급 / 수치가 낮으면 '뚜렷하지 않다'고 말할 것"을 규칙으로 둠
 
 ### 안정성 보완 사항
-- AI 임계치 변경: 0~100 범위를 벗어난 값은 코드가 저장 거부
+- AI 정책 설정: 0~100 범위를 벗어난 값·레벨 순서(주의 ≤ 경고 ≤ 위험 ≤ 장애)에 안 맞는 값은 코드가 저장 거부
+- AI 레벨은 한글("주의/경고/위험/장애") 그대로 받고 코드가 변환 (작은 모델이 위험↔장애 영어 번역을 헷갈림)
+- AI 진단: AI가 문장 대신 목록·객체로 답해도 화면은 글로 바꿔 표시 (`[object Object]` 방지)
 - 트래픽: 실제 초당 값(KB/s)으로 계산, loopback 제외
 - Gemini 503/429(서버 혼잡) 시 최대 3회 재시도 후 한국어 안내 문구 표시
 
@@ -149,7 +159,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
    - 정상/주의/경고/위험/장애 판정 → 코드가 임계치로 결정 (일관성)
    - 원인 해석·조치 제안 → AI가 (사람 말로 설명)
 2. **AI는 시스템을 직접 건드리지 않음**
-   - 임계치 변경: AI는 자연어→JSON "번역"만, 실제 저장은 코드가
+   - 정책 설정: AI는 자연어→JSON "번역"만, 대상 범위 결정·검증·저장은 코드가. 정책 삭제는 사람이 [삭제]를 눌러야만
    - AI가 형식 어겨도 `{`~`}` / `[`~`]`만 추출해 파싱 (안정성)
 3. **AI는 원인을 단정하지 않음**
    - "~일 가능성이 있습니다" 형태로만. 확인 방법·조치를 함께 제시
@@ -183,6 +193,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - **"왜 3개 지표만?"** → 핵심(CPU/메모리/디스크)에 집중, 확장 가능하게 설계
 - **"AI가 원인을 어떻게 아냐?"** → 단정 아님. 세부지표 근거로 "가능성+확인방법" 제시
 - **"서버 여러 대는?"** → Agent 방식. 새 서버는 Agent 설치만 하면 자동 등록 (VM 2대로 시연, 즉석에서 추가도 가능). 대규모는 목록/필터·그룹 정책·지표 이력 저장으로 확장
+- **"서버 100대의 임계치를 바꾸려면 하나씩 쳐야 하나?"** → 임계치는 서버가 아니라 정책 단위. 같은 정책이면 한 문장으로 100대 적용(결과에 적용 서버 수 표시), 여러 정책도 "전체/고객사 전부"로 한 번에
 - **"고객사별 관리는?"** → 고객사 → 서버 → 정책 구조. 서버는 자기 고객사의 정책으로만 판정, 대시보드 Company 필터
 - **"AI 서버가 멈추면?"** → 503/429 자동 재시도 + 사용자 안내. 판정은 코드가 하므로 AI 장애와 무관하게 대시보드는 정상 동작
 - **"실제 AiWACS와 연동은?"** → 권한상 독립 구현, API 열리면 연동 가능
@@ -197,4 +208,7 @@ cd /root/aiwacs-agent && java -jar aiwacs-agent.jar   # 같은 폴더에 agent.p
 - **VM Agent + 정책-서버 매칭 + 고객사 구조 구현** (2026-09-23). VM 1대(rocky-01) 실제 연결 확인
 - 사용자 결정: 심사자 피드백은 "하나만"이었지만 **VM 2대**로 시연하기로 함
 - **진단 → 조치 → 처리 흐름 구현** (2026-10-02): 프로세스 이력·구간 진단, 사람 승인 조치(Agent 명령 통로), 처리/해제 분리 + AI 처리 기록 초안
+- **AI 정책 설정 확장 + 화면 통일 + 브랜치 정리** (2026-10-02): 피드백("서버 100대면 하나씩?") 대응으로 적용 서버 수·일괄 변경·정책 추가/삭제, 공통 상단바, `feat/diagnose-action`·`feat/alarm-ux` 병합 후 main만 사용
+- 시연 영상: VM 없이 가짜 Agent(실제 Agent와 같은 형식)로 자동 녹화한 4분 영상 `~/Desktop/aiwacs-demo.mp4` (녹화용 스크립트는 저장소 밖)
+- 결정: 오프라인 서버 표시 개선(진단 화면 빈 서버칸, 대시보드의 예전 값)은 시연 때 서버를 켜 두므로 하지 않음
 - 다음 할 일: Mac에서 실제 VM으로 전체 흐름 확인 (VM의 agent.properties에 `action.enabled=true`, 새 Agent jar 배포)
