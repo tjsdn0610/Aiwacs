@@ -131,17 +131,32 @@
       .al-row .cnt { color: #9098aa; font-size: 11px; margin-left: 4px; }
       .al-note { color: #9aa1b2; font-size: 11px; margin-top: 10px; }
       .pop-agent-b, .pop-account-b { font-size: 12.5px; color: #3a4055; line-height: 1.7; }
-      /* AI 묶음 아코디언 (3건 → 1사건, 화살표로 펼침) */
-      .algrp-head { font-weight: 700; color: #3a3f52; font-size: 12px; margin: 12px 0 8px; }
-      .ev-acc { border: 1px solid #e3e6ec; border-radius: 9px; margin-bottom: 8px; background: #fff; overflow: hidden; }
-      .ev-top { display: flex; align-items: center; gap: 7px; padding: 10px 11px; cursor: pointer; }
-      .ev-top:hover { background: #f8f9fc; }
-      .ev-arrow { color: #3f6ad8; font-size: 10px; width: 12px; text-align: center; }
-      .ev-title { font-weight: 700; color: #232838; font-size: 12.5px; }
-      .ev-cnt { margin-left: auto; color: #9098aa; font-size: 11px; white-space: nowrap; }
-      .ev-detail { padding: 2px 12px 12px 30px; border-top: 1px solid #eef0f4; }
-      .ev-detail .ev-k { color: #9098aa; font-weight: 700; font-size: 11px; margin-top: 8px; }
-      .ev-detail .ev-v { color: #3a4055; font-size: 12px; }
+      /* AI 사건 마인드맵(위→아래): 현재 알림 → 서버 → 사건(자원) → 레벨별 알림 */
+      .mm-wrap { margin-top: 10px; }
+      .mm { position: relative; }
+      .mm svg { position: absolute; left: 0; top: 0; overflow: visible; }
+      .mm-node {
+        position: absolute; transform: translateY(-50%); box-sizing: border-box;
+        border: 1px solid #d5d9e2; border-radius: 16px; background: #fff; padding: 5px 11px;
+        font-size: 12px; color: #3a4055; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .mm-root { background: #6b46c1; border-color: #6b46c1; color: #fff; font-weight: 700; }
+      .mm-server { background: #eef2fb; border-color: #c9d4ef; color: #2f52b0; font-weight: 700; }
+      .mm-event { cursor: pointer; font-weight: 700; color: #232838; border-width: 2px; }
+      .mm-event:hover { box-shadow: 0 2px 8px rgba(23,32,64,0.12); }
+      .mm-event.on { box-shadow: 0 0 0 3px rgba(107,70,193,0.25); }
+      .mm-event.lv-주의 { border-color: #e0a63a; } .mm-event.lv-경고 { border-color: #e07a2a; }
+      .mm-event.lv-위험 { border-color: #d64545; } .mm-event.lv-장애 { border-color: #a02020; }
+      .mm-leaves { border: none; background: none; padding: 0; display: flex; gap: 5px; }
+      .mm-leaf { font-size: 11px; padding: 2px 8px; font-weight: 700; cursor: default; }
+      .mm-leaf.lv-주의 { background: #fbf1da; } .mm-leaf.lv-경고 { background: #fbe6d6; }
+      .mm-leaf.lv-위험 { background: #fbe9e9; } .mm-leaf.lv-장애 { background: #f6d7d7; }
+      .mm-dim { opacity: 0.3; }
+      .mm-card { border: 1px solid #e3e6ec; border-left: 3px solid #6b46c1; border-radius: 8px; background: #f8f9fc; padding: 10px 13px; margin-top: 12px; }
+      .mm-card .ev-h { display: flex; align-items: center; gap: 7px; }
+      .mm-card .ev-t { font-weight: 700; color: #232838; font-size: 12.5px; }
+      .mm-card .ev-k { color: #9098aa; font-weight: 700; font-size: 11px; margin-top: 7px; }
+      .mm-card .ev-v { color: #3a4055; font-size: 12px; }
       .content {
         padding: 16px;
         display: grid;
@@ -1389,37 +1404,89 @@
           const raw = d.rawCount || 0;
           if (!events.length) { out.innerHTML = '<div class="al-empty">묶을 발생 알림이 없습니다.</div>'; return; }
           out.innerHTML =
-            `<div class="al-note" style="margin-top:0">현재 알림 ${raw}건 → 사건 ${events.length}건 (원본 알림은 레벨 탭에 그대로 있습니다)</div>` +
+            `<div class="al-note" style="margin-top:0">사건을 누르면 AI 해석을 봅니다 (원본 알림은 레벨 탭에 그대로 있습니다)</div>` +
             (d.aiNote ? `<div class="al-note" style="color:#a0661a">${alEsc(d.aiNote)} — 묶음만 표시합니다.</div>` : "") +
-            events.map((e, i) => {
-              const lv = Object.entries(e.byLevel || {}).map(([k, v]) => `${k} ${v}`).join(" · ");
-              return `<div class="ev-acc">
-                <div class="ev-top" onclick="toggleEv(${i})">
-                  <span class="ev-arrow" id="evarr-${i}">▶</span>
-                  <span class="${alLv(e.level)}">${alEsc(e.level)}</span>
-                  <span class="ev-title">${alEsc(e.title)}</span>
-                  <span class="ev-cnt">알림 ${alEsc(e.alarmCount)}건</span>
-                </div>
-                <div class="ev-detail" id="evdet-${i}" hidden>
-                  <div class="ev-k">사건 구간</div><div class="ev-v">${alEsc(e.firstAt)} ~ ${alEsc(e.lastAt)} · 발생 횟수 합계 ${alEsc(e.occurrences)}회</div>
-                  <div class="ev-k">레벨별</div><div class="ev-v">${alEsc(lv)} (지표: ${alEsc((e.metrics || []).join(", "))})</div>
-                  <div class="ev-k">묶인 알림</div><div class="ev-v">${(e.members || []).map(alEsc).join("<br>")}</div>
-                  <div class="ev-k">원인 추정 (AI)</div><div class="ev-v">${alEsc(e.cause)}</div>
-                  <div class="ev-k">권장 조치 (AI)</div><div class="ev-v">${alEsc(e.action)}</div>
-                </div>
-              </div>`;
-            }).join("") +
+            `<div class="mm-wrap"><div class="mm" id="mm"></div></div><div id="mm-card"></div>` +
             `<div class="al-actions"><button class="al-btn ghost" onclick="alEvents=null;groupAlarmsUI()">다시 묶기</button></div>`;
+          renderMindMap(events, raw);
         } catch (e) {
           out.innerHTML = '<div class="al-empty" style="color:#a03535">묶기 중 오류가 발생했습니다.</div>';
         }
       }
-      function toggleEv(i) {
-        const det = document.getElementById("evdet-" + i);
-        const arr = document.getElementById("evarr-" + i);
-        if (!det) return;
-        det.hidden = !det.hidden;
-        if (arr) arr.textContent = det.hidden ? "▶" : "▼";
+      // ----- AI 사건 마인드맵 (위→아래): 현재 알림 → 서버 → 사건(자원) → 레벨별 알림 -----
+      // 위치는 코드가 계산: 한 줄씩 아래로 쌓고, 단계마다 오른쪽으로 들여쓴다 (패널 너비 그대로)
+      const MM_X = { root: 0, server: 22, event: 46, leaf: 70 };
+      const MM_LV = ["장애", "위험", "경고", "주의"]; // 심각한 레벨부터
+
+      function renderMindMap(events, raw) {
+        const box = document.getElementById("mm");
+        const W = box.parentElement.clientWidth || 348;
+        const nodes = []; // {col, y, html, cls, evs, title, onclick}
+        const links = []; // {from, to, evs}
+        const servers = [];
+        events.forEach((e, i) => {
+          let s = servers.find((x) => x.name === e.server);
+          if (!s) servers.push((s = { name: e.server, evs: [] }));
+          s.evs.push(i);
+        });
+
+        let y = 16;
+        const add = (n, h) => { n.y = y + 0; y += h; return nodes.push(n) - 1; };
+        const rn = add({ col: "root", evs: events.map((_, i) => i), cls: "mm-root", html: `현재 알림 ${raw}건 → 사건 ${events.length}건` }, 38);
+        servers.forEach((s) => {
+          const sn = add({ col: "server", evs: s.evs, cls: "mm-server", html: "🖥 " + alEsc(s.name), title: s.name }, 36);
+          links.push({ from: rn, to: sn, evs: s.evs });
+          s.evs.forEach((i) => {
+            const e = events[i];
+            const en = add({ col: "event", evs: [i], cls: "mm-event lv-" + e.level, title: e.title,
+              html: `<span class="${alLv(e.level)}" style="margin-right:6px">${alEsc(e.level)}</span>${alEsc(e.title)}`,
+              onclick: `selectMindEvent(${i})` }, 32);
+            links.push({ from: sn, to: en, evs: [i] });
+            const lvs = MM_LV.filter((lv) => (e.byLevel || {})[lv]);
+            const chips = (lvs.length ? lvs : [e.level]).map((lv) => {
+              const members = (e.members || []).filter((m) => String(m).startsWith(lv + " "));
+              return `<span class="mm-leaf al-lv lv-${lv}" title="${alEsc(members.join("\n")).replace(/"/g, "&quot;")}">${alEsc(lv)} ${alEsc((e.byLevel || {})[lv] || members.length)}건</span>`;
+            }).join("");
+            const ln = add({ col: "leaf", evs: [i], cls: "mm-leaves", html: chips }, 34);
+            links.push({ from: en, to: ln, evs: [i] });
+          });
+          y += 4;
+        });
+
+        const H = y;
+        const evAttr = (evs) => ` data-evs=" ${evs.join(" ")} "`;
+        // 부모 왼쪽 아래에서 내려와 자식 왼쪽으로 꺾이는 선
+        const paths = links.map((l) => {
+          const a = nodes[l.from], b = nodes[l.to];
+          const x = MM_X[a.col] + 12, x2 = MM_X[b.col];
+          return `<path${evAttr(l.evs)} d="M${x},${a.y + 12} L${x},${b.y - 8} Q${x},${b.y} ${x + 8},${b.y} L${x2},${b.y}" fill="none" stroke="#c3c9d6" stroke-width="1.5"/>`;
+        }).join("");
+        box.style.height = H + "px";
+        box.innerHTML =
+          `<svg width="${W}" height="${H}">${paths}</svg>` +
+          nodes.map((n) =>
+            `<div class="mm-node ${n.cls}"${evAttr(n.evs)} style="left:${MM_X[n.col]}px;top:${n.y}px;max-width:${W - MM_X[n.col]}px"` +
+            (n.title ? ` title="${alEsc(n.title).replace(/"/g, "&quot;")}"` : "") +
+            (n.onclick ? ` onclick="${n.onclick}"` : "") + `>${n.html}</div>`
+          ).join("");
+        selectMindEvent(0);
+      }
+
+      // 사건을 고르면 그 가지만 진하게, 아래 카드에 AI 해석 표시
+      function selectMindEvent(i) {
+        const e = (alEvents || [])[i];
+        if (!e) return;
+        document.querySelectorAll("#mm [data-evs]").forEach((el) => {
+          const mine = el.dataset.evs.includes(" " + i + " ");
+          el.classList.toggle("mm-dim", !mine);
+          el.classList.toggle("on", mine && el.classList.contains("mm-event"));
+        });
+        document.getElementById("mm-card").innerHTML = `<div class="mm-card">
+          <div class="ev-h"><span class="${alLv(e.level)}">${alEsc(e.level)}</span><span class="ev-t">${alEsc(e.title)}</span></div>
+          <div class="ev-k">사건 구간</div><div class="ev-v">${alEsc(e.firstAt)} ~ ${alEsc(e.lastAt)} · 알림 ${alEsc(e.alarmCount)}건 · 발생 횟수 합계 ${alEsc(e.occurrences)}회 (지표: ${alEsc((e.metrics || []).join(", "))})</div>
+          <div class="ev-k">원인 추정 (AI)</div><div class="ev-v">${alEsc(e.cause)}</div>
+          <div class="ev-k">권장 조치 (AI)</div><div class="ev-v">${alEsc(e.action)}</div>
+        </div>`;
       }
       loadAlarms();
       setInterval(loadAlarms, 10000);
