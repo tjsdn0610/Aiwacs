@@ -21,7 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *
  * 발생/해제와 처리는 서로 다른 축이다 (실제 AiWACS도 알람 tbl_alarm_event와 처리 tbl_alarm_process_detail이 따로).
  * - 발생/해제(status): 코드가 지표로 자동 결정. 처리했다고 해제되지 않고, 해제됐다고 처리된 것도 아니다.
- * - 처리(processes): 사람이 남기는 기록. 한 알람에 여러 번 쌓인다 (예: 조치 중 → 완료).
+ * - 처리(processes): 사람이 남기는 기록. 한 알람에 여러 번 쌓인다 (예: 점검 중 → 완료).
  */
 public class Alarm {
 
@@ -29,7 +29,7 @@ public class Alarm {
 
     /** AiWACS 처리 팝업과 같은 4가지 처리 상태 */
     public enum ProcessStatus {
-        IGNORE("무시"), MAINTENANCE("조치 중"), HOLD("보류"), COMPLETE("완료");
+        IGNORE("무시"), MAINTENANCE("점검 중"), HOLD("보류"), COMPLETE("완료");
 
         public final String kr;
 
@@ -39,7 +39,8 @@ public class Alarm {
     }
 
     /** 처리 기록 한 줄 */
-    public record ProcessRecord(ProcessStatus status, String note, String by, Instant at) {}
+    /** 처리 기록 한 줄. action=true면 사람이 직접 쓴 기록이 아니라, 승인한 조치의 실행 결과가 자동으로 남은 것 */
+    public record ProcessRecord(ProcessStatus status, String note, String by, Instant at, boolean action) {}
 
     /** 같은 알람이 계속될 때 발생 횟수를 1 올리는 간격 */
     static final Duration COUNT_INTERVAL = Duration.ofMinutes(1);
@@ -103,7 +104,12 @@ public class Alarm {
 
     /** 처리 기록 추가. 발생/해제 상태는 바꾸지 않는다 (값이 내려가면 코드가 따로 해제). */
     public void process(ProcessStatus s, String by, String note, Instant now) {
-        processes.add(new ProcessRecord(s, note, by, now));
+        processes.add(new ProcessRecord(s, note, by, now, false));
+    }
+
+    /** 사람이 승인한 조치(프로세스 종료 등)의 결과를 처리 기록으로 남긴다 — 처리 내역 하나에서 사건 경과를 다 보게 */
+    public void processByAction(String by, String note, Instant now) {
+        processes.add(new ProcessRecord(ProcessStatus.MAINTENANCE, note, by, now, true));
     }
 
     public List<ProcessRecord> getProcesses() { return processes; }
@@ -175,6 +181,7 @@ public class Alarm {
         m.put("note", r.note());
         m.put("by", r.by());
         m.put("at", FMT.format(r.at()));
+        m.put("action", r.action());
         return m;
     }
 }

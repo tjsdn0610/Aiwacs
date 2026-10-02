@@ -35,6 +35,8 @@ public class ActionCommand {
     private Instant doneAt;
     private Status status = Status.PENDING;
     private String message;
+    /** 결과를 처리 기록으로 남긴 알람 수 (null = 아직 안 끝남) */
+    private Integer recordedAlarms;
 
     public ActionCommand(long id, Long serverId, String server, String action, long pid, String name, long start,
                          String by, String reason, Instant now) {
@@ -69,8 +71,22 @@ public class ActionCommand {
         doneAt = now;
     }
 
+    void recorded(int alarmCount) {
+        this.recordedAlarms = alarmCount;
+    }
+
+    private static final Map<Status, String> RESULT_KR = Map.of(
+            Status.DONE, "성공", Status.FAILED, "실패", Status.EXPIRED, "만료(실행 안 됨)", Status.SIMULATED, "시뮬레이션(실행 안 됨)");
+
+    /** 처리 내역에 남길 한 줄. 예) "[조치] stress-ng(PID 1234) 정상 종료 → 성공: stress-ng(PID 1234)를 정상 종료했습니다." */
+    public String recordNote() {
+        return "[조치] " + name + "(PID " + pid + ") " + actionKr(action) + " → "
+                + RESULT_KR.getOrDefault(status, status.name()) + (message == null ? "" : ": " + message);
+    }
+
     public long getId() { return id; }
     public Long getServerId() { return serverId; }
+    public String getBy() { return by; }
     public Status getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getSentAt() { return sentAt; }
@@ -102,6 +118,7 @@ public class ActionCommand {
         m.put("message", message);
         m.put("createdAt", FMT.format(createdAt));
         m.put("doneAt", doneAt == null ? null : FMT.format(doneAt));
+        m.put("recordedAlarms", recordedAlarms);
         return m;
     }
 }

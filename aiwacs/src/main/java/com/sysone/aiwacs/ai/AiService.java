@@ -211,11 +211,13 @@ public class AiService {
      * - 어떤 알림끼리 한 사건인지는 코드(AlarmService.events)가 정한다: 같은 서버 + 같은 자원 → 한 사건.
      *   (실측: CPU 한 번 오른 것이 CPU/CPU Core/CPU User × 주의·경고·장애로 불어나고, 발생 횟수·시각이 똑같았다)
      * - AI는 묶인 사건마다 제목·원인·조치만 쓴다. AI가 실패해도 묶음 자체는 그대로 보여준다.
-     * (demo 인자는 예전 화면 호환용으로 남겨 두었고, 묶기는 항상 실제 발생 알림 기준)
+     * (demo 인자는 예전 화면 호환용으로 남겨 두었고, 묶기는 항상 실제 알림 기준)
+     *
+     * @param includeOpenWork true면 해제됐어도 처리가 끝나지 않은 알림까지 묶는다 (알림 내역 화면용)
      */
-    public Map<String, Object> groupAlarms(boolean demo) {
+    public Map<String, Object> groupAlarms(boolean demo, boolean includeOpenWork) {
         List<Map<String, Object>> alarms = currentAlarms();
-        List<Map<String, Object>> events = alarmService.events();
+        List<Map<String, Object>> events = alarmService.events(includeOpenWork);
         if (events.isEmpty()) {
             return Map.of("ok", true, "source", "current", "rawCount", 0,
                     "alarms", alarms, "result", Map.of("events", List.of()));
@@ -256,7 +258,7 @@ public class AiService {
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("ok", true);
         resp.put("source", "current");
-        resp.put("rawCount", alarms.size());
+        resp.put("rawCount", events.stream().mapToInt(e -> (int) e.get("alarmCount")).sum()); // 묶인 원본 알림 수
         resp.put("alarms", alarms);
         resp.put("result", Map.of("events", out));
         if (aiNote != null) {

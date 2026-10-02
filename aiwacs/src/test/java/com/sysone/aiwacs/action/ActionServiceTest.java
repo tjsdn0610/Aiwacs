@@ -5,7 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -15,6 +18,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import com.sysone.aiwacs.alarm.AlarmService;
 import com.sysone.aiwacs.server.AgentReport;
 import com.sysone.aiwacs.server.MonitoredServer;
 import com.sysone.aiwacs.server.ServerService;
@@ -25,6 +29,7 @@ class ActionServiceTest {
     private static final long START = 1_790_000_000_000L;
 
     private final ServerService servers = mock(ServerService.class);
+    private final AlarmService alarms = mock(AlarmService.class);
 
     private ActionService serviceWith(boolean agentEnabled, boolean simulation) {
         MonitoredServer s = mock(MonitoredServer.class);
@@ -36,7 +41,8 @@ class ActionServiceTest {
                 new AgentReport.Proc("sshd", 0.1, 0.4, 800L, START, "root")),
                 List.of(), Map.of(), Map.of(), Map.of(), List.of(), agentEnabled, List.of());
         when(servers.latest(1L)).thenReturn(Optional.of(new ServerService.Snapshot(report, Instant.now())));
-        return new ActionService(servers, simulation);
+        when(alarms.recordAction(eq(1L), anyString(), anyString())).thenReturn(6);
+        return new ActionService(servers, alarms, simulation);
     }
 
     @Test
@@ -53,6 +59,8 @@ class ActionServiceTest {
 
         svc.applyResults(1L, List.of(Map.of("id", r.command().getId(), "ok", true, "message", "정상 종료했습니다.")));
         assertEquals(ActionCommand.Status.DONE, r.command().getStatus());
+        assertEquals(6, r.command().toMap().get("recordedAlarms"), "결과가 그 서버의 처리 대기 알림 6건에 처리 기록으로 남음");
+        verify(alarms).recordAction(1L, "운영자", "[조치] stress-ng(PID 1234) 정상 종료 → 성공: 정상 종료했습니다.");
     }
 
     @Test

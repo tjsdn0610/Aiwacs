@@ -42,7 +42,7 @@ public class AlarmController {
 
     /**
      * 선택 알람에 처리 기록 추가 — body: {"ids":[1,2], "status":"MAINTENANCE", "note":"...", "by":"..."}
-     * status: IGNORE(무시) / MAINTENANCE(조치 중) / HOLD(보류) / COMPLETE(완료). 없으면 COMPLETE.
+     * status: IGNORE(무시) / MAINTENANCE(점검 중) / HOLD(보류) / COMPLETE(완료). 없으면 COMPLETE.
      */
     @PostMapping("/handle")
     public ResponseEntity<Map<String, Object>> handle(@RequestBody Map<String, Object> body) {

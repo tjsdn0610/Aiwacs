@@ -82,11 +82,44 @@ class AlarmServiceTest {
 
         cpuAt(5);
         Map<String, Object> first = engine.history().getFirst();
-        assertEquals("RESOLVED", first.get("status"), "조치 중으로 처리한 알람도 값이 내려가면 해제 시각이 남음");
+        assertEquals("RESOLVED", first.get("status"), "점검 중으로 처리한 알람도 값이 내려가면 해제 시각이 남음");
         assertEquals("MAINTENANCE", first.get("processStatus"));
 
         engine.handle(ids, Alarm.ProcessStatus.COMPLETE, "운영자", "종료 후 정상 복귀");
-        assertEquals(12, engine.handled().size(), "알람 6건 × 기록 2번(조치 중 → 완료)");
+        List<Map<String, Object>> handled = engine.handled();
+        assertEquals(2, handled.size(), "한 번에 같이 기록한 6건은 한 줄로 → 기록 2번(점검 중 → 완료) = 2줄");
+        assertEquals("COMPLETE", handled.get(0).get("status"), "최신 기록이 위");
+        assertEquals(6, handled.get(0).get("alarmCount"));
         assertEquals("COMPLETE", engine.history().getFirst().get("processStatus"));
+    }
+
+    @Test
+    void 조치_결과는_처리가_남은_알람의_처리_기록으로_남는다() {
+        cpuAt(44);
+        assertEquals(6, engine.recordAction(1L, "운영자", "[조치] stress-ng(PID 1234) 정상 종료 → 성공"));
+        Map<String, Object> row = engine.handled().getFirst();
+        assertEquals(true, row.get("action"), "조치에서 온 기록이라고 표시");
+        assertEquals("MAINTENANCE", row.get("status"), "점검 중(ON MAINTENANCE)으로 기록");
+        assertEquals(6, row.get("alarmCount"));
+
+        cpuAt(5); // 해제
+        List<Long> ids = engine.history().stream().map(a -> (Long) a.get("id")).toList();
+        engine.handle(ids, Alarm.ProcessStatus.COMPLETE, "운영자", "완료");
+        assertEquals(0, engine.recordAction(1L, "운영자", "또 조치"), "해제되고 처리도 끝난 알람에는 더 남기지 않음");
+    }
+
+    @Test
+    void 해제됐어도_처리가_남은_알람은_알림_내역의_사건_묶기에_포함된다() {
+        cpuAt(44);
+        cpuAt(5);
+        assertEquals(0, engine.events().size(), "종 패널: 발생 중인 사건만");
+        List<Map<String, Object>> open = engine.events(true);
+        assertEquals(1, open.size(), "알림 내역: 해제됐지만 미처리인 알람 6건 → 사건 1건");
+        assertEquals(6, open.get(0).get("alarmCount"));
+        assertEquals(0, open.get(0).get("activeCount"));
+
+        List<Long> ids = engine.history().stream().map(a -> (Long) a.get("id")).toList();
+        engine.handle(ids, Alarm.ProcessStatus.COMPLETE, "운영자", "완료");
+        assertEquals(0, engine.events(true).size(), "처리가 끝나면 묶기 대상에서 빠짐");
     }
 }

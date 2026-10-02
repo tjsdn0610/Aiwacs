@@ -809,7 +809,7 @@
         <div class="m-safe">
           • 실행 직전에 Agent가 PID·이름·시작 시각을 다시 확인하고, 하나라도 다르면 실행하지 않습니다.<br />
           • 30초 안에 Agent가 명령을 가져가지 않으면 자동으로 취소됩니다.<br />
-          • 누가·언제·무엇을 실행했는지는 처리 내역의 조치 이력에 남습니다.
+          • 누가·언제·무엇을 실행했고 결과가 어땠는지는 관련 알림의 처리 내역에 자동으로 남습니다.
         </div>
         <div class="m-btns">
           <button onclick="closeConfirm()">취소</button>
@@ -1090,13 +1090,16 @@
             box.innerHTML = `<div class="act-result wait">${STEP[c.status]}</div>`;
           } else if (c) {
             const ok = c.status === "DONE" || c.status === "SIMULATED";
-            box.innerHTML = `<div class="act-result ${ok ? "ok" : "fail"}">${ok ? "✔" : "✖"} ${hx(c.message)}<br>
-              ${ok ? "부하가 내려가면 알람은 자동으로 해제됩니다. " : ""}<a href="${alertsLink()}">알림 내역에서 처리 기록 남기기 →</a></div>`;
+            const rec = c.recordedAlarms
+              ? `이 결과는 관련 알림 ${c.recordedAlarms}건의 <a href="/alerts/handled">처리 내역</a>에 '점검 중'으로 자동 기록했습니다.`
+              : "관련된 처리 대기 알림이 없어 처리 기록은 남기지 않았습니다.";
+            box.innerHTML = `<div class="act-result ${ok ? "ok" : "fail"}">${ok ? "✔" : "✖"} ${hx(c.message)}<br>${rec}<br>
+              ${ok ? "부하가 내려가면 알람은 자동으로 해제됩니다. 마무리는 " : ""}<a href="${alertsLink()}">알림 내역에서 '완료' 기록 남기기 →</a></div>`;
             return;
           }
           await new Promise((r) => setTimeout(r, 1000));
         }
-        box.innerHTML = '<div class="act-result fail">결과를 확인하지 못했습니다. 처리 내역의 조치 이력을 확인해 주세요.</div>';
+        box.innerHTML = '<div class="act-result fail">결과를 확인하지 못했습니다. 처리 내역에서 조치 기록을 확인해 주세요.</div>';
       }
 
       // 진단할 서버 목록 (온라인 서버만 선택 가능). 주소에 ?serverId=가 있으면 처음 한 번 그 서버를 고른다

@@ -48,7 +48,9 @@ public class AiController {
     @PostMapping("/alarm-group")
     public Map<String, Object> alarmGroup(@RequestBody(required = false) Map<String, Object> body) {
         boolean demo = body != null && Boolean.parseBoolean(String.valueOf(body.get("demo")));
-        return aiService.groupAlarms(demo);
+        // scope: "active"(기본, 종 패널) = 발생 중만 / "open"(알림 내역) = 처리가 끝나지 않은 알림까지
+        boolean open = body != null && "open".equals(String.valueOf(body.get("scope")));
+        return aiService.groupAlarms(demo, open);
     }
 
     /** 상태 진단 — body: {"serverId": 1, "minutes": 30} (minutes 0 = 지금 이 순간만) */
