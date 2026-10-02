@@ -357,7 +357,7 @@
               <td>${chips}</td>
               <td>${state}</td>
               <td class="ev-go" onclick="event.stopPropagation()">
-                <a href="/ai?serverId=${esc(String(e.key).split("|")[0])}&minutes=30&run=1#diagnose">✦ 진단·조치</a>
+                <a href="/ai?serverId=${esc(String(e.key).split("|")[0])}&since=${esc(e.firstAtMillis)}&run=1#diagnose" title="사건 시작 5분 전부터 지금까지를 진단합니다">✦ 진단·조치</a>
                 <button onclick='selectIds(${JSON.stringify(e.alarmIds || [])})'>알림 ${esc(e.alarmCount)}건 선택</button>
               </td>
             </tr>`;

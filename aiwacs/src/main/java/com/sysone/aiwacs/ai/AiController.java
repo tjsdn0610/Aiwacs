@@ -1,5 +1,6 @@
 package com.sysone.aiwacs.ai;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -53,20 +54,29 @@ public class AiController {
         return aiService.groupAlarms(demo, open);
     }
 
-    /** 상태 진단 — body: {"serverId": 1, "minutes": 30} (minutes 0 = 지금 이 순간만) */
+    /**
+     * 상태 진단 — body: {"serverId": 1, "minutes": 30} (minutes 0 = 지금 이 순간만)
+     * 사건에서 들어오면 {"serverId": 1, "since": 사건 시작 epoch ms} → 구간을 "사건 시작 5분 전 ~ 지금"으로 자동 설정
+     */
     @PostMapping("/diagnose")
     public Map<String, Object> diagnose(@RequestBody Map<String, Object> body) {
         Object id = body.get("serverId");
         Long serverId = null;
         int minutes = 30;
+        Long since = null;
         try {
             serverId = id == null ? null : Long.valueOf(String.valueOf(id));
             if (body.get("minutes") != null) {
                 minutes = Integer.parseInt(String.valueOf(body.get("minutes")));
             }
+            if (body.get("since") != null && !String.valueOf(body.get("since")).isBlank()) {
+                since = Long.valueOf(String.valueOf(body.get("since")));
+            }
         } catch (NumberFormatException ignored) {
             // 잘못된 값이면 서버는 null → "서버를 선택해 주세요" 안내, 구간은 기본 30분
         }
-        return diagnosis.diagnose(serverId, minutes);
+        return since != null
+                ? diagnosis.diagnoseSince(serverId, Instant.ofEpochMilli(since))
+                : diagnosis.diagnose(serverId, minutes);
     }
 }

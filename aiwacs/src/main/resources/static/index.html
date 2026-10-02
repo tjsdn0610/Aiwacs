@@ -1490,7 +1490,7 @@
           <div class="ev-k">원인 추정 (AI)</div><div class="ev-v">${alEsc(e.cause)}</div>
           <div class="ev-k">권장 조치 (AI)</div><div class="ev-v">${alEsc(e.action)}</div>
           <div class="ev-go">
-            <a href="/ai?serverId=${encodeURIComponent(String(e.key).split("|")[0])}&minutes=30&run=1#diagnose">✦ AI 진단 · 조치</a>
+            <a href="/ai?serverId=${encodeURIComponent(String(e.key).split("|")[0])}&since=${e.firstAtMillis}&run=1#diagnose" title="사건 시작 5분 전부터 지금까지를 진단합니다">✦ AI 진단 · 조치</a>
             <a href="/alerts?select=${(e.alarmIds || []).join(",")}">처리 기록 →</a>
           </div>
         </div>`;

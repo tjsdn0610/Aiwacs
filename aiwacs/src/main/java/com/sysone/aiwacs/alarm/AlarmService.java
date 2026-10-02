@@ -245,7 +245,9 @@ public class AlarmService {
             e.put("occurrences", list.stream().mapToInt(Alarm::getCount).sum());
             e.put("byLevel", byLevel);
             e.put("metrics", list.stream().map(Alarm::getMetric).distinct().toList());
-            e.put("firstAt", FMT.format(list.stream().map(Alarm::getFirstAt).min(Comparator.naturalOrder()).orElseThrow()));
+            Instant evStart = list.stream().map(Alarm::getFirstAt).min(Comparator.naturalOrder()).orElseThrow();
+            e.put("firstAt", FMT.format(evStart));
+            e.put("firstAtMillis", evStart.toEpochMilli()); // AI 진단 구간을 사건 시작에 맞추는 데 씀
             e.put("lastAt", FMT.format(list.stream().map(Alarm::getLastAt).max(Comparator.naturalOrder()).orElseThrow()));
             e.put("activeCount", (int) list.stream().filter(a -> a.getStatus() == Alarm.Status.ACTIVE).count());
             e.put("alarmIds", list.stream().map(Alarm::getId).toList());
