@@ -197,6 +197,7 @@
   let alList = [];
   let alTab = "전체";
   let alEvents = null; // AI 사건 결과 (탭을 다시 열 때 재사용, 새로고침 시 다시 묶음)
+  let alGrouping = false; // AI 묶기 요청 중 — 10초 자동 새로고침이 같은 요청을 또 보내지 않게 (로컬 AI는 한 번에 하나씩 처리)
 
   function renderAlarmTabs() {
     const n = (lv) => (lv === "전체" ? alList.length : alList.filter((a) => a.level === lv).length);
@@ -241,6 +242,8 @@
     }
   }
   async function groupAlarmsUI() {
+    if (alGrouping) return;
+    alGrouping = true;
     const out = document.getElementById("alarm-grouped");
     out.innerHTML = '<div class="al-empty">같은 서버·같은 자원 알림을 묶고, AI가 원인을 해석하는 중…</div>';
     try {
@@ -259,6 +262,8 @@
       renderMindMap(events, raw);
     } catch (e) {
       out.innerHTML = '<div class="al-empty" style="color:#a03535">묶기 중 오류가 발생했습니다.</div>';
+    } finally {
+      alGrouping = false;
     }
   }
 
