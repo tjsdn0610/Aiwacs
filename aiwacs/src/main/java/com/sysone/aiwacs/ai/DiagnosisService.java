@@ -153,7 +153,7 @@ public class DiagnosisService {
         resp.put("trend", trend.stream().map(h -> List.of(h.getTime().toEpochMilli(), h.getCpu(), h.getMemory())).toList());
         resp.put("suspects", suspectMaps);
         resp.put("candidates", candidates);
-        resp.put("recommendation", recommendation(result.path("recommend"), candidates));
+        resp.put("recommendation", recommendation(recommendNode(result), candidates));
         resp.put("simulation", actions.isSimulation());
         resp.put("agentActionEnabled", Boolean.TRUE.equals(report.actionEnabled()));
         lastDiagnosis.put(serverId, new Last(Instant.now(), resp));
@@ -177,6 +177,34 @@ public class DiagnosisService {
             c.put("blocked", actions.blockedReason(serverId, p)); // null이면 조치 버튼 표시
         }
         out.add(c);
+    }
+
+    /**
+     * AI의 조치 추천 위치. 작은 모델이 이름이 비슷한 "action"(권장 조치) 칸에 추천 객체를
+     * (객체 또는 JSON 글자로) 넣고 "recommend"를 비우는 경우가 있어, 그때는 그 칸에서 꺼낸다.
+     * 꺼낸 값도 아래 recommendation()에서 코드가 똑같이 검증한다.
+     */
+    private JsonNode recommendNode(JsonNode result) {
+        JsonNode rec = result.path("recommend");
+        if (rec.isObject() && !rec.path("process").asString("").isBlank()) {
+            return rec;
+        }
+        JsonNode act = result.path("action");
+        if (act.isObject() && act.has("process")) {
+            return act;
+        }
+        String text = act.asString("").strip();
+        if (text.startsWith("{") && text.contains("\"process\"")) {
+            try {
+                JsonNode parsed = ai.extractJson(text, false);
+                if (parsed.has("process")) {
+                    return parsed;
+                }
+            } catch (Exception ignored) {
+                // 글자가 JSON이 아니면 원래대로 (추천 없음)
+            }
+        }
+        return rec;
     }
 
     /** AI 추천을 코드가 검증: 후보 목록에 있는 프로세스 + 허용된 조치만 통과. 아니면 '그대로 두기' */

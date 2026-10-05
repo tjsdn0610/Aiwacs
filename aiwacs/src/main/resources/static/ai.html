@@ -395,16 +395,6 @@
       }
 
       /* ===== 최근 N분 원인 프로세스 (코드 계산) ===== */
-      .diag-period {
-        padding: 11px 14px;
-        margin-right: 8px;
-        border: 1px solid #e3e6ec;
-        border-radius: 24px;
-        font-size: 13px;
-        color: #3a3f52;
-        background: #fff;
-        vertical-align: middle;
-      }
       .sec {
         margin-top: 16px;
         border: 1px solid #eef0f4;
@@ -721,10 +711,6 @@
               <select id="diag-server" class="diag-server">
                 <option value="">서버 불러오는 중...</option>
               </select>
-              <select id="diag-period" class="diag-period" title="알림·사건에서 들어오면 사건 시작 5분 전부터 지금까지로 자동으로 맞춰집니다">
-                <option value="0" selected>지금 이 순간</option>
-                <option value="30">최근 30분</option>
-              </select>
               <button class="diag-btn" id="diag-btn" onclick="runDiagnose()">
                 AI 진단 실행
               </button>
@@ -847,11 +833,10 @@
           '<div style="color:#9098aa;padding:20px;">AI가 최근 이력을 보고 진단 중입니다...</div>';
         try {
           const serverId = document.getElementById("diag-server").value;
-          const period = document.getElementById("diag-period").value;
-          // "since:<epoch ms>" = 사건 기준 구간 (사건 시작 5분 전 ~ 지금)
-          const req = period.startsWith("since:")
-            ? { serverId: serverId || null, since: Number(period.slice(6)) }
-            : { serverId: serverId || null, minutes: Number(period) };
+          // 구간은 화면에서 고르지 않고 자동: 사건에서 들어오면 "사건 시작 5분 전 ~ 지금", 메뉴에서 바로 실행하면 "최근 30분"
+          const req = diagSince
+            ? { serverId: serverId || null, since: diagSince }
+            : { serverId: serverId || null, minutes: DIAG_MINUTES };
           const res = await fetch("/api/ai/diagnose", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -928,6 +913,14 @@
       const VAL_KR = { terminate: "정상 종료", renice: "우선순위 낮추기", none: "그대로 두기" };
       function asText(v) {
         if (v == null) return "";
+        // JSON 글자로 온 경우(예: '{"process": "...", "action": "terminate"}')도 풀어서 글로
+        if (typeof v === "string" && /^\s*[{[]/.test(v)) {
+          try {
+            return asText(JSON.parse(v));
+          } catch (e) {
+            /* JSON이 아니면 그대로 표시 */
+          }
+        }
         if (Array.isArray(v)) return v.map(asText).filter(Boolean).join("\n");
         if (typeof v === "object")
           return Object.entries(v).map(([k, x]) => (/^\d+$/.test(k) ? "" : (KEY_KR[k] || k) + ": ") + asText(x)).join("\n");
@@ -1098,15 +1091,9 @@
       // 진단할 서버 목록 (온라인 서버만 선택 가능). 주소에 ?serverId=가 있으면 처음 한 번 그 서버를 고른다
       const params = new URLSearchParams(location.search);
       let wantServer = params.get("serverId");
-      if (params.get("minutes") != null) document.getElementById("diag-period").value = params.get("minutes");
-      // 알림·사건에서 들어오면(?since=사건 시작 epoch ms) 구간을 "사건 시작 5분 전 ~ 지금"으로 자동 선택
-      if (params.get("since")) {
-        const t = new Date(Number(params.get("since")));
-        const hm = String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0");
-        const sel = document.getElementById("diag-period");
-        sel.insertAdjacentHTML("afterbegin", `<option value="since:${Number(params.get("since"))}">사건 구간 (${hm} 시작 · 5분 전부터)</option>`);
-        sel.selectedIndex = 0;
-      }
+      // 알림·사건에서 들어오면(?since=사건 시작 epoch ms) 진단 구간 = "사건 시작 5분 전 ~ 지금" (화면 선택칸 없이 자동)
+      const DIAG_MINUTES = Number(params.get("minutes")) || 30;
+      const diagSince = params.get("since") ? Number(params.get("since")) : null;
       async function loadServerOptions() {
         const sel = document.getElementById("diag-server");
         const prev = wantServer || sel.value;

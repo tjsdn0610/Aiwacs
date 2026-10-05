@@ -2,6 +2,8 @@ package com.sysone.aiwacs.server;
 
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -57,10 +59,25 @@ public class ServerController {
                 "commands", actions.takeCommands(server.getId())));
     }
 
-    /** 모니터링 서버 목록 (온라인 여부 + 서버별 대표 상태 포함) */
+    /**
+     * 모니터링 서버 목록 (온라인 여부 + 서버별 대표 상태 포함).
+     * 고객사별로 모아서 (고객사는 처음 등록된 순, 같은 고객사 안에서는 등록 순, 고객사 미지정은 맨 뒤)
+     */
     @GetMapping("/api/servers")
     public List<Map<String, Object>> servers() {
-        return service.findAll().stream().map(s -> {
+        Map<String, List<MonitoredServer>> byCompany = new LinkedHashMap<>();
+        List<MonitoredServer> noCompany = new ArrayList<>();
+        for (MonitoredServer s : service.findAll()) {
+            if (s.getCompany() == null || s.getCompany().isBlank()) {
+                noCompany.add(s);
+            } else {
+                byCompany.computeIfAbsent(s.getCompany(), k -> new ArrayList<>()).add(s);
+            }
+        }
+        List<MonitoredServer> ordered = new ArrayList<>();
+        byCompany.values().forEach(ordered::addAll);
+        ordered.addAll(noCompany);
+        return ordered.stream().map(s -> {
             Map<String, Object> m = service.summary(s);
             // 오프라인이면 판정하지 않음 (마지막 값으로 정상/위험을 표시하면 오해 소지)
             m.put("level", service.isOnline(s.getId())

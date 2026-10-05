@@ -370,7 +370,16 @@
         background: #e8f6ee;
         color: #2e9e52;
       }
-      /* 주의/경고/위험/장애 색은 위 알림 배지(.lv-주의 ~ .lv-장애)와 같은 것을 씀 */
+      /* 서버 탭의 레벨 배지 (알림 배지와 같은 색) — 종 패널 스타일이 topbar.js로 옮겨가면서 여기에 따로 둠 */
+      .server-tab .lv.lv-주의 { background: #fbf1da; color: #c9820a; }
+      .server-tab .lv.lv-경고 { background: #fbe6d6; color: #c9600a; }
+      .server-tab .lv.lv-위험 { background: #fbe9e9; color: #d64545; }
+      .server-tab .lv.lv-장애 { background: #f6d7d7; color: #a02020; }
+      /* 앞의 작은 원도 서버 상태 색으로 (오프라인은 회색) */
+      .server-tab .dot.on.lv-주의 { background: #e0a63a; }
+      .server-tab .dot.on.lv-경고 { background: #e07a2a; }
+      .server-tab .dot.on.lv-위험 { background: #d64545; }
+      .server-tab .dot.on.lv-장애 { background: #a02020; }
       .lv-오프라인 {
         background: #f0f1f4;
         color: #7a8194;
@@ -625,7 +634,7 @@
             const lv = s.online ? s.level || "정상" : "오프라인";
             return `<div class="server-tab ${s.id === selectedServerId ? "active" : ""}"
                   onclick="selectServer(${s.id})" title="고객사: ${s.company || "미지정"}&#10;${s.os || ""} · ${s.ip || ""}&#10;정책: ${s.policyName || "-"}">
-              <span class="dot ${s.online ? "on" : ""}"></span>${s.name}
+              <span class="dot ${s.online ? "on lv-" + lv : ""}"></span>${s.name}
               <span class="lv lv-${lv}">${lv}</span>
             </div>`;
           })
