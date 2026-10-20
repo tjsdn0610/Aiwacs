@@ -64,7 +64,7 @@ public class ActionService {
 
     /**
      * 조치를 끝내고(성공·실패·만료·시뮬레이션 모두), 그 결과를 관련 알람의 처리 기록으로 남긴다.
-     * 조치는 처리 과정 중 하는 행동 하나라서, 결과를 처리 내역 한 곳에서 사건 경과와 함께 보게 한다.
+     * 조치는 처리 과정 중 하는 행동 하나라서, 결과를 처리 내역 한 곳에서 이벤트 경과와 함께 보게 한다.
      */
     private void finish(ActionCommand c, ActionCommand.Status status, String message, Instant now) {
         c.finish(status, message, now);

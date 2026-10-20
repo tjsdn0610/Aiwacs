@@ -23,7 +23,7 @@ import com.sysone.aiwacs.server.ServerService;
 class AlarmServiceTest {
 
     private final ServerService servers = mock(ServerService.class);
-    private final AlarmService engine = new AlarmService(servers);
+    private final AlarmService engine = new AlarmService(servers, mock(AlarmStore.class)); // DB 저장은 이 테스트의 관심사가 아님
     private final Threshold cpu = new Threshold(30, 40, 50, 60);
 
     AlarmServiceTest() {
@@ -48,7 +48,7 @@ class AlarmServiceTest {
     }
 
     @Test
-    void 레벨마다_알람이_따로_쌓이고_사건_하나로_묶인다() {
+    void 레벨마다_알람이_따로_쌓이고_이벤트_하나로_묶인다() {
         cpuAt(26);
         assertEquals(0, engine.activeAlarms().size(), "주의(30) 미만이면 알람 없음");
 
@@ -61,7 +61,7 @@ class AlarmServiceTest {
         assertEquals(12, engine.activeAlarms().size(), "지표 3 × 레벨 4 = 12건 (주의·경고 알람은 그대로 열려 있음)");
 
         List<Map<String, Object>> events = engine.events();
-        assertEquals(1, events.size(), "12건이 사건 1건으로 묶임");
+        assertEquals(1, events.size(), "12건이 이벤트 1건으로 묶임");
         assertEquals("장애", events.get(0).get("level"));
         assertEquals(12, events.get(0).get("alarmCount"));
 
@@ -109,12 +109,12 @@ class AlarmServiceTest {
     }
 
     @Test
-    void 해제됐어도_처리가_남은_알람은_알림_내역의_사건_묶기에_포함된다() {
+    void 해제됐어도_처리가_남은_알람은_알림_내역의_이벤트_묶기에_포함된다() {
         cpuAt(44);
         cpuAt(5);
-        assertEquals(0, engine.events().size(), "종 패널: 발생 중인 사건만");
+        assertEquals(0, engine.events().size(), "종 패널: 발생 중인 이벤트만");
         List<Map<String, Object>> open = engine.events(true);
-        assertEquals(1, open.size(), "알림 내역: 해제됐지만 미처리인 알람 6건 → 사건 1건");
+        assertEquals(1, open.size(), "알림 내역: 해제됐지만 미처리인 알람 6건 → 이벤트 1건");
         assertEquals(6, open.get(0).get("alarmCount"));
         assertEquals(0, open.get(0).get("activeCount"));
 

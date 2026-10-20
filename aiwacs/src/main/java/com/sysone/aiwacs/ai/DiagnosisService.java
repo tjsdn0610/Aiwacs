@@ -39,7 +39,7 @@ import tools.jackson.databind.JsonNode;
 public class DiagnosisService {
 
     private static final DateTimeFormatter HM = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
-    /** 진단 구간 최대 (지표 이력은 7일 보관이지만, 진단은 사건 하나를 보는 용도라 길 필요가 없음) */
+    /** 진단 구간 최대 (지표 이력은 7일 보관이지만, 진단은 이벤트 하나를 보는 용도라 길 필요가 없음) */
     private static final int MAX_MINUTES = 180;
     /** 처리 기록 초안에 "직전 진단"을 쓸 수 있는 시간 */
     private static final Duration DIAGNOSIS_FRESH = Duration.ofHours(3);
@@ -50,34 +50,41 @@ public class DiagnosisService {
     private final ProcessHistoryService processHistory;
     private final ActionService actions;
     private final AlarmService alarms;
+    private final WiderContext wider;
 
     /** 서버별 마지막 진단 결과 (처리 기록 초안의 근거로 재사용) */
     private record Last(Instant at, Map<String, Object> result) {}
     private final Map<Long, Last> lastDiagnosis = new ConcurrentHashMap<>();
 
     public DiagnosisService(AiClient ai, ServerService servers, MetricHistoryService metricHistory,
-                            ProcessHistoryService processHistory, ActionService actions, AlarmService alarms) {
+                            ProcessHistoryService processHistory, ActionService actions, AlarmService alarms,
+                            WiderContext wider) {
         this.ai = ai;
         this.servers = servers;
         this.metricHistory = metricHistory;
         this.processHistory = processHistory;
         this.actions = actions;
         this.alarms = alarms;
+        this.wider = wider;
     }
 
     // ===================== 1) 상태 진단 + 조치 제안 =====================
 
-    /** 사건에서 들어왔을 때: 사건 시작보다 이만큼 앞부터 본다 (부하 '전' 모습이 구간에 들어가야 "새로 등장"을 판단할 수 있음) */
+    /** 이벤트에서 들어왔을 때: 이벤트 시작보다 이만큼 앞부터 본다 (부하 '전' 모습이 구간에 들어가야 "새로 등장"을 판단할 수 있음) */
     private static final Duration BEFORE_EVENT = Duration.ofMinutes(5);
 
     /**
-     * 사건 기준 진단: 구간을 "사건 시작 5분 전 ~ 지금"으로 자동으로 맞춘다.
+     * 이벤트 기준 진단: 구간을 "이벤트 시작 5분 전 ~ 지금"으로 자동으로 맞춘다.
      * 운영자가 몇 분을 볼지 고민할 필요 없이, 항상 '부하 전 → 시작 → 지금'이 구간에 들어간다.
-     * (사건이 MAX_MINUTES보다 오래됐으면 최근 MAX_MINUTES분까지만)
+     * (이벤트가 MAX_MINUTES보다 오래됐으면 최근 MAX_MINUTES분까지만)
      */
     public Map<String, Object> diagnoseSince(Long serverId, Instant eventStart) {
+        return diagnoseSince(serverId, eventStart, false);
+    }
+
+    public Map<String, Object> diagnoseSince(Long serverId, Instant eventStart, boolean extended) {
         long minutes = (long) Math.ceil(Duration.between(eventStart.minus(BEFORE_EVENT), Instant.now()).toSeconds() / 60.0);
-        Map<String, Object> resp = diagnose(serverId, (int) Math.max(1, minutes));
+        Map<String, Object> resp = diagnose(serverId, (int) Math.max(1, minutes), extended);
         if (Boolean.TRUE.equals(resp.get("ok"))) {
             resp.put("eventStart", Alarm.fmt(eventStart));
         }
@@ -89,6 +96,14 @@ public class DiagnosisService {
      *                (부하가 이미 끝난 뒤에 눌러도 그 시간에 무슨 일이 있었는지 알 수 있게)
      */
     public Map<String, Object> diagnose(Long serverId, int minutes) {
+        return diagnose(serverId, minutes, false);
+    }
+
+    /**
+     * @param extended true = 2차 진단: 사람이 [과거 데이터까지 분석]을 고른 경우. 같은 시간대 다른 서버 이벤트,
+     *                 평소 대비(지난 7일), 과거 비슷한 이벤트의 처리 기록까지 코드가 모아 AI에게 넘긴다.
+     */
+    public Map<String, Object> diagnose(Long serverId, int minutes, boolean extended) {
         if (!ai.isConfigured()) {
             return Map.of("ok", false, "reply", AiService.NOT_CONFIGURED);
         }
@@ -130,7 +145,10 @@ public class DiagnosisService {
         }
 
         // ----- AI 해석 -----
-        String prompt = prompt(server, status, report, minutes, trend, suspects, runningByName, candidates);
+        Map<String, Object> ctx = extended && minutes > 0 ? wider.build(serverId, server.label(), from, suspects) : null;
+        String prompt = (ctx == null ? "" : widerHead(ctx))
+                + prompt(server, status, report, minutes, trend, suspects, runningByName, candidates, ctx != null)
+                + (ctx == null ? "" : widerPrompt(ctx));
         JsonNode result;
         try {
             result = ai.extractJson(ai.generate(prompt), false);
@@ -156,6 +174,30 @@ public class DiagnosisService {
         resp.put("recommendation", recommendation(recommendNode(result), candidates));
         resp.put("simulation", actions.isSimulation());
         resp.put("agentActionEnabled", Boolean.TRUE.equals(report.actionEnabled()));
+        resp.put("extended", ctx != null);
+        if (ctx != null) {
+            resp.put("context", ctx);
+            Map<String, Object> root = rootOf(result, ctx);
+            if (root != null) {
+                resp.put("root", root);
+                // 근본 원인이 다른 서버에 있으면 이 서버에서는 조치하지 않는 것이 맞다 (증상만 누르는 셈)
+                @SuppressWarnings("unchecked")
+                Map<String, Object> rec = (Map<String, Object>) resp.get("recommendation");
+                rec.put("action", "none");
+                rec.put("process", null);
+                rec.put("reason", "근본 원인이 " + root.get("server") + "에 있을 가능성이 커, 이 서버에서는 조치하지 않고 원인 서버를 먼저 진단합니다.");
+            }
+        } else if (minutes > 0) {
+            // 1차 진단의 근거가 약하면 사람에게 "과거 데이터까지 분석할까요?"를 묻는다 (판단은 정해진 규칙으로)
+            boolean hasNew = suspects.stream().anyMatch(x -> "NEW".equals(x.type()));
+            boolean noAction = "none".equals(((Map<?, ?>) resp.get("recommendation")).get("action"));
+            if (!hasNew || noAction) {
+                resp.put("widenSuggested", true);
+                resp.put("widenReason", !hasNew
+                        ? "이 서버의 이벤트 구간에서 새로 등장한 프로세스가 없어, 지금 데이터만으로는 원인이 분명하지 않습니다."
+                        : "AI가 이 서버에서 조치할 대상을 정하지 못했습니다.");
+            }
+        }
         lastDiagnosis.put(serverId, new Last(Instant.now(), resp));
         return resp;
     }
@@ -230,9 +272,92 @@ public class DiagnosisService {
         return m;
     }
 
+    /** 2차 진단 맨 앞에 두는 지시: 시스템이 계산한 근본 원인 후보를 먼저 보여 주고 판단하게 한다 (작은 모델이 뒤쪽 근거를 놓치지 않게) */
+    @SuppressWarnings("unchecked")
+    private String widerHead(Map<String, Object> ctx) {
+        List<Map<String, Object>> cands = (List<Map<String, Object>>) ctx.get("rootCandidates");
+        if (cands == null || cands.isEmpty()) {
+            return "[2차 진단] 사람이 '과거 데이터까지 분석'을 요청했습니다. 맨 아래 [넓혀 본 근거]를 반드시 함께 보고 해석하세요.\n\n";
+        }
+        Map<String, Object> c = cands.get(0);
+        return """
+                [2차 진단 — 가장 먼저 읽으세요]
+                사람이 '과거 데이터까지 분석'을 요청했습니다. 이 서버 안에서는 새로 등장한 프로세스가 없어, 시스템이 다른 서버·평소 대비·과거 기록까지 넓혀 근본 원인 후보를 찾았습니다.
+                시스템이 찾은 근본 원인 후보: %s의 %s
+                근거: %s
+                → 이 서버의 CPU·프로세스 변화가 이 후보의 결과(증상)인지 판단하고, correlation에 그 연결을 서버 이름과 함께 화살표(→)로 쓰세요.
+                  예) "DB서버 pg_dump 시작 → DB 응답 지연 → 웹서버 php-fpm 요청 적체 → CPU 100%%" (이 서버의 프로세스는 '새로 등장'이 아니라 '늘어남'입니다)
+                → 근거가 맞다면 이 서버의 프로세스(평소에도 도는 업무 프로세스)는 원인이 아니라 증상이므로, 이 서버의 recommend.action은 "none"입니다.
+                → action(권장 조치)에는 이 서버의 프로세스를 끄라는 내용을 쓰지 말고, 원인 서버에서 확인·조치할 일을 단계별로 쓰세요.
+                → rootCause에는 근본 원인을 한 문장으로(가능성으로), pastNote에는 과거 기록·평소 대비에서 참고한 점을 한 문장으로 쓰세요.
+
+                """.formatted(c.get("server"), c.get("process"), String.join(" / ", (List<String>) c.get("reasons")));
+    }
+
+    /** 2차 진단에 덧붙이는 근거와 규칙 (근거는 모두 코드가 계산한 사실) */
+    private String widerPrompt(Map<String, Object> ctx) {
+        return """
+
+
+                [넓혀 본 근거] 사람이 '과거 데이터까지 분석'을 요청했습니다. 아래는 시스템이 계산한 사실입니다.
+                - 이 서버의 이벤트 시작: %s
+                - 같은 시간대 다른 서버 이벤트 (시작 순, 그 서버에서 새로 등장한 프로세스 포함):
+                %s
+                - 평소 대비 (지금 구간 vs 지난 7일 같은 시간대 평균):
+                %s
+                - 원인 후보 프로세스가 평소 언제 돌았는지:
+                %s
+                - 과거 비슷한 이벤트의 처리 기록 (엔지니어가 남긴 기록):
+                %s
+
+                [넓혀 본 근거 해석 규칙]
+                - 이 서버의 변화가 다른 서버 이벤트의 결과(증상)일 가능성을 먼저 검토하세요.
+                  다른 서버 이벤트가 먼저 시작했고 그 서버에 평소 없던 프로세스가 새로 등장했다면, 그것이 근본 원인일 가능성이 높습니다.
+                - 평소에도 이 시간에 늘 돌던 업무 프로세스가 늘어난 것은 원인보다 증상일 가능성이 큽니다.
+                - 평소와 다른 시간에 돈 작업(예: 평소 새벽에 돌던 작업이 지금 실행)은 강한 근거입니다.
+                - 과거 처리 기록에 같은 상황의 원인·해결 방법이 있으면 날짜와 함께 인용하세요. 기록에 없는 내용은 지어내지 마세요.
+                - 과거 처리 기록에 같은 상황에서 효과가 있었던 조치가 있으면, 그 조치를 우선 고려하세요.
+                  백업처럼 다시 실행할 수 있는 작업이 업무 시간에 돌아 다른 서버까지 영향을 주면, "terminate"(정상 종료 후 한가한 시간에 재실행)를 추천할 수 있습니다.
+                - 근본 원인이 다른 서버에 있으면 rootServer에 그 서버 이름을 그대로 쓰고, 이 서버의 recommend.action은 "none"으로 하세요.
+                - 출력 JSON에 다음 항목을 추가하세요:
+                  "rootServer": "근본 원인으로 보이는 다른 서버 이름 (이 서버가 원인이면 빈 문자열)",
+                  "rootCause": "근본 원인 한 문장 (가능성으로)",
+                  "pastNote": "과거 기록·평소 대비에서 참고한 점 한 문장 (없으면 빈 문자열)"
+                """.formatted(ctx.get("thisStartedAt"), ai.toJson(ctx.get("otherEvents")), ai.toJson(ctx.get("baseline")),
+                ai.toJson(ctx.get("processUsual")), ai.toJson(ctx.get("pastIncidents")));
+    }
+
+    /** AI가 말한 근본 원인 서버를 코드가 검증: 같은 시간대 이벤트 목록에 있는 서버만 인정 */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> rootOf(JsonNode result, Map<String, Object> ctx) {
+        // 근본 원인 후보는 시스템이 정해진 규칙으로 고른 것을 쓴다 (원인 후보 프로세스처럼 '계산은 시스템') — AI는 그 후보를 해석
+        List<Map<String, Object>> cands = (List<Map<String, Object>>) ctx.get("rootCandidates");
+        if (cands != null && !cands.isEmpty()) {
+            Map<String, Object> m = new LinkedHashMap<>(cands.get(0));
+            m.put("cause", result.path("rootCause").asString(""));
+            return m;
+        }
+        String name = result.path("rootServer").asString("").strip();
+        if (name.isEmpty()) {
+            return null;
+        }
+        for (Map<String, Object> o : (List<Map<String, Object>>) ctx.get("otherEvents")) {
+            String srv = String.valueOf(o.get("server"));
+            if (srv.equals(name) || name.contains(srv) || srv.contains(name)) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("serverId", o.get("serverId"));
+                m.put("server", srv);
+                m.put("since", o.get("since"));
+                m.put("cause", result.path("rootCause").asString(""));
+                return m;
+            }
+        }
+        return null;
+    }
+
     private String prompt(MonitoredServer server, Map<String, Map<String, Object>> status, AgentReport report,
                           int minutes, List<MetricHistory> trend, List<ProcessTrend.Suspect> suspects,
-                          Map<String, AgentReport.Proc> running, List<Map<String, Object>> candidates) {
+                          Map<String, AgentReport.Proc> running, List<Map<String, Object>> candidates, boolean extended) {
         Map<String, Object> serverInfo = new LinkedHashMap<>();
         serverInfo.put("name", server.label());
         serverInfo.put("os", server.getOs());
@@ -284,7 +409,7 @@ public class DiagnosisService {
                 - reason에는 왜 그 조치인지와, 실행 전에 사람이 확인할 점을 한두 문장으로
 
                 [출력 형식] JSON만. 다른 말 금지.
-                {"level": "정상|주의|경고|위험|장애", "summary": "지금 무슨 일인지 1~2문장", "timeline": "최근 구간에 언제부터 언제까지 무슨 일이 있었는지 1~2문장 (구간 정보가 없으면 빈 문자열)", "correlation": "인과관계(→)와 쉬운 설명", "causes": ["가능성 있는 원인1", "원인2"], "check": "직접 확인해볼 방법", "action": "권장 조치를 단계별로", "recommend": {"process": "후보 이름 또는 빈 문자열", "action": "terminate|renice|none", "reason": "추천 이유와 확인할 점"}}
+                {"level": "정상|주의|경고|위험|장애", "summary": "지금 무슨 일인지 1~2문장",%s "timeline": "최근 구간에 언제부터 언제까지 무슨 일이 있었는지 1~2문장 (구간 정보가 없으면 빈 문자열)", "correlation": "인과관계(→)와 쉬운 설명", "causes": ["가능성 있는 원인1", "원인2"], "check": "직접 확인해볼 방법", "action": "권장 조치를 단계별로", "recommend": {"process": "후보 이름 또는 빈 문자열", "action": "terminate|renice|none", "reason": "추천 이유와 확인할 점"}}
 
                 [서버 정보]
                 %s
@@ -305,7 +430,7 @@ public class DiagnosisService {
                 %s
 
                 [조치 가능 후보] (지금 실행 중이고 보호 대상이 아닌 프로세스)
-                %s""".formatted(ai.toJson(serverInfo), ai.toJson(status), ai.toJson(detail), ai.toJson(topNow),
+                %s""".formatted(extended ? " \"rootCause\": \"근본 원인 한 문장 (가능성으로)\", \"pastNote\": \"과거 기록·평소 대비에서 참고한 점 한 문장\"," : "", ai.toJson(serverInfo), ai.toJson(status), ai.toJson(detail), ai.toJson(topNow),
                 minutes, minutes == 0 ? "(지금 이 순간만 진단)" : String.join("\n", trendLines),
                 minutes, ai.toJson(suspectFacts), ai.toJson(candidateNames));
     }
@@ -343,66 +468,144 @@ public class DiagnosisService {
         facts.put("resolvedAt", resolved == null ? "아직 발생 중" : Alarm.fmt(resolved));
         facts.put("durationMin", Duration.between(first, resolved != null ? resolved : Instant.now()).toMinutes());
 
-        List<Map<String, Object>> diag = new ArrayList<>();
-        List<Map<String, Object>> acts = new ArrayList<>();
-        for (Long sid : serverIds) {
-            Last last = lastDiagnosis.get(sid);
-            if (last != null && last.at().isAfter(Instant.now().minus(DIAGNOSIS_FRESH))) {
-                JsonNode d = (JsonNode) last.result().get("diagnosis");
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("server", last.result().get("server"));
-                m.put("diagnosedAt", Alarm.fmt(last.at()));
-                m.put("summary", d.path("summary").asString(""));
-                m.put("timeline", d.path("timeline").asString(""));
-                m.put("causes", d.path("causes"));
-                diag.add(m);
-            }
-            acts.addAll(actions.since(sid, first.minus(Duration.ofMinutes(10))));
-        }
-        facts.put("diagnosis", diag);
-        facts.put("actions", acts.stream().map(a -> a.get("createdAt") + " " + a.get("by") + "이(가) " + a.get("name")
-                + "(PID " + a.get("pid") + ") " + a.get("actionKr") + " 승인 → " + a.get("status") + ": " + a.get("message")).toList());
+        // 이 알림의 서버 + 같은 고객사의 다른 서버.
+        // 근본 원인이 다른 서버에 있을 수 있어서다 (예: DB서버 백업 때문에 웹서버 CPU가 오름 → 조치는 DB서버에서 함)
+        List<String> companies = serverIds.stream().map(servers::findById).flatMap(Optional::stream)
+                .map(MonitoredServer::getCompany).filter(c -> c != null && !c.isBlank()).distinct().toList();
+        List<Long> related = servers.findAll().stream()
+                .filter(s -> !serverIds.contains(s.getId()) && companies.contains(s.getCompany()))
+                .map(MonitoredServer::getId).toList();
+        Instant actFrom = first.minus(Duration.ofMinutes(10));
+        facts.put("diagnosis", diagnoses(serverIds));
+        facts.put("actions", actionLines(serverIds, actFrom));
+        facts.put("relatedDiagnosis", diagnoses(related));
+        facts.put("relatedActions", actionLines(related, actFrom));
 
-        String fallback = fallbackDraft(statusKr, facts);
+        // 현상·조치 줄은 사실 그대로라 코드가 쓰고, AI는 원인·결과 해석만 쓴다 (건수·시각을 AI가 바꾸지 않게)
+        String symptom = symptomLine(list, first, resolved);
+        List<String> acts = new ArrayList<>(actionLines(serverIds, actFrom));
+        acts.addAll(actionLines(related, actFrom));
+        String actionLine = acts.isEmpty() ? "조치 없음" : String.join(" / ", acts);
+        // 실제로 실행된 조치(사람 승인 + Agent 실행 완료) — 원인 줄 검증과 결과 줄에 쓴다
+        List<Map<String, Object>> done = java.util.stream.Stream.concat(serverIds.stream(), related.stream())
+                .flatMap(sid -> actions.since(sid, actFrom).stream())
+                .filter(a -> "DONE".equals(a.get("status")) || "SIMULATED".equals(a.get("status"))).toList();
+        String[] fb = fallbackCauseResult(facts, done);
         if (!ai.isConfigured()) {
-            return Map.of("ok", true, "draft", fallback, "source", "code");
+            return Map.of("ok", true, "draft", draft(statusKr, symptom, fb[0], actionLine, fb[1]), "source", "code");
         }
         String prompt = """
-                당신은 서버 관제 담당자의 처리 기록 작성을 돕습니다. 아래 사실만으로 처리 기록 초안을 쓰세요.
-                - 처리 상태는 "%s"입니다. 상태에 맞게 쓰세요 (점검 중: 지금 무엇을 하고 있는지 / 완료: 원인·조치·결과 / 보류·무시: 그 판단 이유).
-                - 2문장 이내, 150자 이내로 짧게. 한국어 기록체(~함, ~임). 알림을 하나씩 나열하지 말고 "CPU 알림 12건"처럼 요약하세요.
-                - 시각과 수치는 사실에 있는 것만 쓰고 지어내지 마세요.
-                - 원인은 진단 결과가 있을 때만 "~로 추정"으로 쓰고, 없으면 "원인 확인 필요"라고 쓰세요.
-                - 조치 이력이 있으면 누가 무엇을 실행했고 결과가 어땠는지 포함하세요.
-                - JSON만: {"draft": "초안 문장"}
+                당신은 서버 관제 담당자의 처리 기록 작성을 돕습니다. 아래 사실만으로 처리 기록의 "원인" 한 줄을 쓰세요.
+                - 처리 상태는 "%s"입니다. 한국어 기록체(~함, ~임), 60자 이내 한 문장.
+                - cause: 진단 결과(diagnosis 또는 relatedDiagnosis)가 있으면 "~로 추정됨"으로. 근본 원인이 다른 서버로 진단됐으면(rootCauseServer) 그 서버와 프로세스를 쓰세요. 진단이 없으면 "원인 확인 필요".
+                  형식: "<서버>의 <프로세스>(<무엇을 하는 프로세스인지>)가 <자원>을 많이 써 생긴 것으로 추정됨" — 같은 말을 반복하지 마세요.
+                  (형식 예: "ABC 서버의 batch-job(정산 작업)이 디스크를 많이 써 생긴 것으로 추정됨")
+                - 시각·프로세스 이름은 사실에 있는 것만. 수치를 지어내지 마세요.
+                - JSON만: {"cause": "..."}
 
                 [사실]
                 %s""".formatted(statusKr, ai.toJson(facts));
         try {
-            String draft = ai.extractJson(ai.generate(prompt), false).path("draft").asString("").strip();
-            return draft.isBlank()
-                    ? Map.of("ok", true, "draft", fallback, "source", "code")
-                    : Map.of("ok", true, "draft", draft, "source", "ai");
+            JsonNode r = ai.extractJson(ai.generate(prompt), false);
+            String cause = r.path("cause").asString("").strip();
+            // AI가 원인을 다른 프로세스·서버로 잘못 짚을 수 있어(작은 모델), 실제 조치한 프로세스와 서버가 들어 있는지 코드가 확인
+            boolean ok = !cause.isBlank() && done.stream().allMatch(a ->
+                    cause.contains(String.valueOf(a.get("name"))) && cause.contains(String.valueOf(a.get("server"))));
+            // 결과 줄은 해석이 아니라 사실(조치 → 해제 시각)이라 코드가 쓴다
+            return Map.of("ok", true, "source", ok ? "ai" : "code",
+                    "draft", draft(statusKr, symptom, ok ? cause : fb[0], actionLine, fb[1]));
         } catch (Exception e) {
-            return Map.of("ok", true, "draft", fallback, "source", "code",
+            return Map.of("ok", true, "draft", draft(statusKr, symptom, fb[0], actionLine, fb[1]), "source", "code",
                     "aiNote", "AI 초안을 받지 못해 기본 초안을 넣었습니다.");
         }
     }
 
-    /** AI 없이 사실만으로 만든 기본 초안 */
-    @SuppressWarnings("unchecked")
-    private static String fallbackDraft(String statusKr, Map<String, Object> facts) {
-        StringBuilder sb = new StringBuilder("[" + statusKr + "] ");
-        sb.append(String.join(", ", (List<String>) facts.get("servers")))
-                .append(" 알림 ").append(((List<?>) facts.get("alarms")).size()).append("건, ")
-                .append(facts.get("firstAt")).append(" 발생 → ").append(facts.get("resolvedAt"))
-                .append(" (").append(facts.get("durationMin")).append("분). ");
-        List<Map<String, Object>> diag = (List<Map<String, Object>>) facts.get("diagnosis");
-        sb.append(diag.isEmpty() ? "원인 확인 필요. " : "원인 추정: " + diag.get(0).get("summary") + " ");
-        List<String> acts = (List<String>) facts.get("actions");
-        if (!acts.isEmpty()) {
-            sb.append("조치: ").append(acts.get(0)).append('.');
+    private static String draft(String statusKr, String symptom, String cause, String action, String result) {
+        return "현상: " + symptom + "\n원인: " + cause + "\n조치: " + action + "\n결과: " + result;
+    }
+
+    /** 현상 한 줄: 서버 · 자원별 알림 건수(최고 레벨) · 시작 시각 · 지속 시간 */
+    private static String symptomLine(List<Alarm> list, Instant first, Instant resolved) {
+        List<String> order = List.of("주의", "경고", "위험", "장애");
+        Map<String, List<Alarm>> byRes = new LinkedHashMap<>();
+        for (Alarm a : list) {
+            String t = a.title();
+            String res = t.startsWith("CPU") ? "CPU" : t.startsWith("메모리") || t.startsWith("Memory") ? "메모리"
+                    : t.startsWith("디스크") || t.startsWith("Disk") ? "디스크" : "기타";
+            byRes.computeIfAbsent(res, k -> new ArrayList<>()).add(a);
         }
-        return sb.toString().strip();
+        List<String> parts = byRes.entrySet().stream().map(e -> e.getKey() + " 알림 " + e.getValue().size() + "건(최고 "
+                + e.getValue().stream().map(Alarm::getLevel).max(Comparator.comparingInt(order::indexOf)).orElse("") + ")").toList();
+        long min = Duration.between(first, resolved != null ? resolved : Instant.now()).toMinutes();
+        return String.join(", ", list.stream().map(Alarm::getServer).distinct().toList()) + " " + String.join(", ", parts)
+                + ", " + HM.format(first) + "부터 " + min + "분" + (resolved == null ? "째 발생 중" : "간");
+    }
+
+    /** 서버별 직전 진단 요약 (처리 기록 초안의 근거) */
+    private List<Map<String, Object>> diagnoses(List<Long> serverIds) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Long sid : serverIds) {
+            Last last = lastDiagnosis.get(sid);
+            if (last == null || last.at().isBefore(Instant.now().minus(DIAGNOSIS_FRESH))) {
+                continue;
+            }
+            JsonNode d = (JsonNode) last.result().get("diagnosis");
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("server", last.result().get("server"));
+            m.put("diagnosedAt", Alarm.fmt(last.at()));
+            m.put("summary", d.path("summary").asString(""));
+            m.put("causes", d.path("causes"));
+            if (last.result().get("root") instanceof Map<?, ?> root) {
+                m.put("rootCauseServer", root.get("server"));
+                m.put("rootCause", root.get("cause"));
+            }
+            out.add(m);
+        }
+        return out;
+    }
+
+    /** 서버별 조치 이력을 한 줄씩 (누가 · 어느 서버 · 어떤 프로세스 · 무엇 · 결과) */
+    private List<String> actionLines(List<Long> serverIds, Instant since) {
+        return serverIds.stream().flatMap(sid -> actions.since(sid, since).stream())
+                .map(a -> String.valueOf(a.get("createdAt")).substring(11, 16) + " " + a.get("by") + " 승인으로 " + a.get("server") + "의 " + a.get("name")
+                        + "(PID " + a.get("pid") + ")를 " + a.get("actionKr") + " → " + statusKr(String.valueOf(a.get("status")))
+                        // 성공 메시지는 앞 내용과 같아 생략, 실패·만료일 때만 이유를 붙임
+                        + (a.get("message") == null || "DONE".equals(a.get("status")) ? "" : " (" + a.get("message") + ")"))
+                .toList();
+    }
+
+    private static String statusKr(String s) {
+        return switch (s) {
+            case "DONE" -> "실행 완료";
+            case "FAILED" -> "실패";
+            case "EXPIRED" -> "만료(미실행)";
+            case "SIMULATED" -> "시뮬레이션 기록";
+            default -> "대기 중";
+        };
+    }
+
+    /** AI 없이 사실만으로 만든 원인·결과 줄 */
+    @SuppressWarnings("unchecked")
+    private static String[] fallbackCauseResult(Map<String, Object> facts, List<Map<String, Object>> done) {
+        List<Map<String, Object>> diag = new ArrayList<>((List<Map<String, Object>>) facts.get("diagnosis"));
+        diag.addAll((List<Map<String, Object>>) facts.get("relatedDiagnosis"));
+        String cause;
+        if (!done.isEmpty()) {
+            Map<String, Object> a = done.get(0);
+            cause = a.get("server") + "의 " + a.get("name") + " 실행이 원인으로 추정됨 (진단 후 조치한 프로세스)";
+        } else {
+            cause = diag.stream().filter(d -> d.get("rootCause") != null).findFirst()
+                    .map(d -> d.get("rootCauseServer") + " — " + d.get("rootCause") + " (추정)")
+                    .orElse(diag.isEmpty() ? "원인 확인 필요" : diag.get(0).get("summary") + " (추정)");
+        }
+        String res;
+        if ("아직 발생 중".equals(facts.get("resolvedAt"))) {
+            res = "알림 아직 발생 중";
+        } else {
+            String at = String.valueOf(facts.get("resolvedAt"));
+            res = (done.isEmpty() ? "" : done.get(0).get("name") + " " + done.get(0).get("actionKr") + " 후 ")
+                    + (at.length() >= 16 ? at.substring(11, 16) : at) + " 알림 해제됨";
+        }
+        return new String[] { cause, res };
     }
 }

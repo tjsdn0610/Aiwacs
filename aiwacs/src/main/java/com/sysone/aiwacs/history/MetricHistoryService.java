@@ -176,6 +176,11 @@ public class MetricHistoryService {
         return rows;
     }
 
+    /** from 이상 to 미만의 1분 평균 이력 (평소 대비: 지난 날짜의 같은 시간대) */
+    public List<MetricHistory> between(Long serverId, Instant from, Instant to) {
+        return repository.findByServerIdAndTimeGreaterThanEqualAndTimeLessThanOrderByTimeAsc(serverId, from, to);
+    }
+
     /** 실시간 그래프용 최근 원본 값 (오래된 순, 최대 40개) */
     public List<Map<String, Object>> recent(Long serverId) {
         List<Point> points;

@@ -1,4 +1,4 @@
-// 모든 화면 공통 상단바: 환영 문구 · 현재 시각 · 아이콘(Agent / 알림(종) / 계정) + 종 패널(레벨 탭 + AI 사건 마인드맵)
+// 모든 화면 공통 상단바: 환영 문구 · 현재 시각 · 아이콘(Agent / 알림(종) / 계정) + 종 패널(레벨 탭 + AI 이벤트 마인드맵)
 // 화면마다 <div class="topbar"> 바로 뒤에서 이 파일을 불러오면 오른쪽 영역과 팝오버가 그려진다.
 // - 왼쪽 경로(.breadcrumb)는 화면마다 그대로 둔다
 // - 화면 전용 요소(예: 대시보드의 Company 선택)는 .topbar-right 안에 class="tb-extra"로 두면 시계 옆에 유지된다
@@ -63,7 +63,7 @@
     .al-btn.ghost:hover { background: #e6eaf1; }
     .al-empty { color: #9098aa; font-size: 12.5px; padding: 6px 0; }
     .al-note { color: #9aa1b2; font-size: 11px; margin-top: 10px; }
-    /* 종 패널 레벨 탭 (AiWACS: 전체/주의/경고/위험/장애) + AI 사건 탭 */
+    /* 종 패널 레벨 탭 (AiWACS: 전체/주의/경고/위험/장애) + AI 이벤트 탭 */
     .al-tabs { display: flex; border-bottom: 1px solid #eef0f4; background: #f8f9fc; }
     .al-tabs button {
       flex: 1; border: none; background: none; padding: 9px 2px; font-size: 12px; color: #7a8194;
@@ -74,7 +74,7 @@
     .al-tabs button.ai { color: #6b46c1; }
     .al-tabs button.ai.on { border-bottom-color: #6b46c1; }
     .al-tabs button.ai .n { background: #ece6fb; color: #6b46c1; }
-    /* AI 사건 마인드맵(위→아래): 현재 알림 → 서버 → 사건(자원) → 레벨별 알림 */
+    /* AI 이벤트 마인드맵(위→아래): 현재 알림 → 서버 → 이벤트(자원) → 레벨별 알림 */
     .mm-wrap { margin-top: 10px; }
     .mm { position: relative; }
     .mm svg { position: absolute; left: 0; top: 0; overflow: visible; }
@@ -148,7 +148,7 @@
         <span>알림 (현재 발생 <span id="pop-alarm-count">0</span>건)</span>
         <button class="al-btn ghost" style="flex:none;padding:3px 10px" onclick="tbLoadAlarms()">새로고침</button>
       </div>
-      <!-- AiWACS 종 패널과 같은 레벨 탭 + 맨 끝에 AI 사건 탭 (원래 탭은 그대로 두고 보기 방식만 하나 추가) -->
+      <!-- AiWACS 종 패널과 같은 레벨 탭 + 맨 끝에 AI 이벤트 탭 (원래 탭은 그대로 두고 보기 방식만 하나 추가) -->
       <div class="al-tabs" id="al-tabs"></div>
       <div class="pop-b">
         <div id="alarm-list"><div class="al-empty">불러오는 중…</div></div>
@@ -192,18 +192,18 @@
     return "al-lv lv-" + (l || "주의");
   }
 
-  // ===== 종 패널: 레벨 탭(전체/주의/경고/위험/장애) + AI 사건 탭 =====
+  // ===== 종 패널: 레벨 탭(전체/주의/경고/위험/장애) + AI 이벤트 탭 =====
   const AL_TABS = ["전체", "주의", "경고", "위험", "장애"];
   let alList = [];
   let alTab = "전체";
-  let alEvents = null; // AI 사건 결과 (탭을 다시 열 때 재사용, 새로고침 시 다시 묶음)
+  let alEvents = null; // AI 이벤트 결과 (탭을 다시 열 때 재사용, 새로고침 시 다시 묶음)
   let alGrouping = false; // AI 묶기 요청 중 — 10초 자동 새로고침이 같은 요청을 또 보내지 않게 (로컬 AI는 한 번에 하나씩 처리)
 
   function renderAlarmTabs() {
     const n = (lv) => (lv === "전체" ? alList.length : alList.filter((a) => a.level === lv).length);
     document.getElementById("al-tabs").innerHTML =
       AL_TABS.map((lv) => `<button class="${alTab === lv ? "on" : ""}" onclick="tbShowAlarmTab('${lv}')">${lv}<span class="n">${n(lv)}</span></button>`).join("") +
-      `<button class="ai ${alTab === "AI" ? "on" : ""}" onclick="tbShowAlarmTab('AI')" title="같은 서버·같은 자원의 알림을 한 사건으로 묶고 AI가 원인을 해석합니다">✦ AI 사건<span class="n">${alEvents ? alEvents.length : "-"}</span></button>`;
+      `<button class="ai ${alTab === "AI" ? "on" : ""}" onclick="tbShowAlarmTab('AI')" title="같은 서버·같은 자원의 알림을 한 이벤트로 묶고 AI가 원인을 해석합니다">✦ AI 이벤트<span class="n">${alEvents ? alEvents.length : "-"}</span></button>`;
   }
 
   function showAlarmTab(tab) {
@@ -255,7 +255,7 @@
       const raw = d.rawCount || 0;
       if (!events.length) { out.innerHTML = '<div class="al-empty">묶을 발생 알림이 없습니다.</div>'; return; }
       out.innerHTML =
-        `<div class="al-note" style="margin-top:0">사건을 누르면 AI 해석을 봅니다 (원본 알림은 레벨 탭에 그대로 있습니다)</div>` +
+        `<div class="al-note" style="margin-top:0">이벤트를 누르면 AI 해석을 봅니다 (원본 알림은 레벨 탭에 그대로 있습니다)</div>` +
         (d.aiNote ? `<div class="al-note" style="color:#a0661a">${alEsc(d.aiNote)} — 묶음만 표시합니다.</div>` : "") +
         `<div class="mm-wrap"><div class="mm" id="mm"></div></div><div id="mm-card"></div>` +
         `<div class="al-actions"><button class="al-btn ghost" onclick="tbRegroupAlarms()">다시 묶기</button></div>`;
@@ -267,7 +267,7 @@
     }
   }
 
-  // ===== AI 사건 마인드맵 (위→아래): 현재 알림 → 서버 → 사건(자원) → 레벨별 알림 =====
+  // ===== AI 이벤트 마인드맵 (위→아래): 현재 알림 → 서버 → 이벤트(자원) → 레벨별 알림 =====
   // 위치는 코드가 계산: 한 줄씩 아래로 쌓고, 단계마다 오른쪽으로 들여쓴다 (패널 너비 그대로)
   const MM_X = { root: 0, server: 22, event: 46, leaf: 70 };
   const MM_LV = ["장애", "위험", "경고", "주의"]; // 심각한 레벨부터
@@ -286,7 +286,7 @@
 
     let y = 16;
     const add = (n, h) => { n.y = y; y += h; return nodes.push(n) - 1; };
-    const rn = add({ col: "root", evs: events.map((_, i) => i), cls: "mm-root", html: `현재 알림 ${raw}건 → 사건 ${events.length}건` }, 38);
+    const rn = add({ col: "root", evs: events.map((_, i) => i), cls: "mm-root", html: `현재 알림 ${raw}건 → 이벤트 ${events.length}건` }, 38);
     servers.forEach((s) => {
       const sn = add({ col: "server", evs: s.evs, cls: "mm-server", html: "🖥 " + alEsc(s.name), title: s.name }, 36);
       links.push({ from: rn, to: sn, evs: s.evs });
@@ -326,7 +326,7 @@
     selectMindEvent(0);
   }
 
-  // 사건을 고르면 그 가지만 진하게, 아래 카드에 AI 해석 표시
+  // 이벤트를 고르면 그 가지만 진하게, 아래 카드에 AI 해석 표시
   function selectMindEvent(i) {
     const e = (alEvents || [])[i];
     if (!e) return;
@@ -337,11 +337,11 @@
     });
     document.getElementById("mm-card").innerHTML = `<div class="mm-card">
       <div class="ev-h"><span class="${alLv(e.level)}">${alEsc(e.level)}</span><span class="ev-t">${alEsc(e.title)}</span></div>
-      <div class="ev-k">사건 구간</div><div class="ev-v">${alEsc(e.firstAt)} ~ ${alEsc(e.lastAt)} · 알림 ${alEsc(e.alarmCount)}건 · 발생 횟수 합계 ${alEsc(e.occurrences)}회 (지표: ${alEsc((e.metrics || []).join(", "))})</div>
+      <div class="ev-k">이벤트 구간</div><div class="ev-v">${alEsc(e.firstAt)} ~ ${alEsc(e.lastAt)} · 알림 ${alEsc(e.alarmCount)}건 · 발생 횟수 합계 ${alEsc(e.occurrences)}회 (지표: ${alEsc((e.metrics || []).join(", "))})</div>
       <div class="ev-k">원인 추정 (AI)</div><div class="ev-v">${alEsc(e.cause)}</div>
       <div class="ev-k">권장 조치 (AI)</div><div class="ev-v">${alEsc(e.action)}</div>
       <div class="ev-go">
-        <a href="/ai?serverId=${encodeURIComponent(String(e.key).split("|")[0])}&since=${e.firstAtMillis}&run=1#diagnose" title="사건 시작 5분 전부터 지금까지를 진단합니다">✦ AI 진단 · 조치</a>
+        <a href="/ai?serverId=${encodeURIComponent(String(e.key).split("|")[0])}&since=${e.firstAtMillis}&run=1#diagnose" title="이벤트 시작 5분 전부터 지금까지를 진단합니다">✦ AI 진단 · 조치</a>
         <a href="/alerts?select=${(e.alarmIds || []).join(",")}">처리 기록 →</a>
       </div>
     </div>`;

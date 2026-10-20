@@ -486,6 +486,107 @@
         display: block;
       }
 
+      /* ===== 2차 진단: 과거 데이터까지 ===== */
+      .widen-box {
+        margin-top: 16px;
+        border: 1px dashed #9fb4e6;
+        background: #f6f9ff;
+        border-radius: 10px;
+        padding: 14px 16px;
+        line-height: 1.6;
+        color: #2c3350;
+      }
+      .widen-box .q {
+        font-weight: 800;
+        margin: 6px 0 10px;
+      }
+      .widen-box button {
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #3f6ad8;
+        background: #3f6ad8;
+        color: #fff;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        margin-right: 6px;
+      }
+      .widen-box button.no {
+        background: #fff;
+        color: #3f6ad8;
+      }
+      .widen-box button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .wider {
+        margin-top: 18px;
+        border-top: 2px solid #3f6ad8;
+        padding-top: 12px;
+      }
+      .wider-h {
+        font-weight: 800;
+        color: #3f6ad8;
+        font-size: 14px;
+      }
+      .ctx-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .ctx-card {
+        border: 1px solid #eef0f4;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fff;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: #2c3350;
+      }
+      .ctx-card .ch {
+        font-weight: 800;
+        color: #3a3f52;
+        margin-bottom: 6px;
+      }
+      .ctx-card .muted {
+        color: #9098aa;
+      }
+      .ctx-card .it {
+        padding: 4px 0;
+        border-top: 1px dashed #eef0f4;
+      }
+      .ctx-card .it:first-of-type {
+        border-top: 0;
+      }
+      .root-box {
+        margin-top: 14px;
+        border-left: 4px solid #d64545;
+        background: #fff5f5;
+        border-radius: 0 8px 8px 0;
+        padding: 12px 14px;
+        line-height: 1.6;
+        color: #2c3350;
+      }
+      .root-box b {
+        color: #c03434;
+      }
+      .root-box a.go-root {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        background: #d64545;
+        color: #fff;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      @media (max-width: 1100px) {
+        .ctx-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
       /* ===== 조치 제안 ===== */
       .act-sec {
         border-color: #d6e0f7;
@@ -833,10 +934,13 @@
           '<div style="color:#9098aa;padding:20px;">AI가 최근 이력을 보고 진단 중입니다...</div>';
         try {
           const serverId = document.getElementById("diag-server").value;
-          // 구간은 화면에서 고르지 않고 자동: 사건에서 들어오면 "사건 시작 5분 전 ~ 지금", 메뉴에서 바로 실행하면 "최근 30분"
+          // 구간은 화면에서 고르지 않고 자동: 이벤트에서 들어오면 "이벤트 시작 5분 전 ~ 지금", 메뉴에서 바로 실행하면 "최근 30분"
           const req = diagSince
             ? { serverId: serverId || null, since: diagSince }
             : { serverId: serverId || null, minutes: DIAG_MINUTES };
+          // 원인 서버로 이동해 온 경우(?extended=1): 사람이 이미 '과거 데이터까지 분석'을 고른 상태라 바로 2차 진단
+          if (diagExtended) req.extended = true;
+          lastReq = req;
           const res = await fetch("/api/ai/diagnose", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -849,7 +953,9 @@
             return;
           }
           lastDiag = data;
-          result.innerHTML = statusHtml(data) + trendHtml(data) + diagHtml(data.diagnosis) + actionHtml(data);
+          result.innerHTML = data.extended
+            ? statusHtml(data) + trendHtml(data) + widerBody(data)
+            : statusHtml(data) + trendHtml(data) + diagHtml(data.diagnosis) + actionHtml(data) + widenHtml(data);
           selectTarget();
         } catch (e) {
           console.log(e);
@@ -896,7 +1002,7 @@
               .join("")
           : `<tr><td colspan="7" style="color:#9098aa;padding:12px 8px">최근 ${data.minutes}분 동안 새로 생기거나 크게 늘어난 프로세스가 없습니다.</td></tr>`;
         return `<div class="sec">
-          <div class="sec-h">${data.eventStart ? `사건 구간 (${hx(String(data.eventStart).slice(11, 16))} 시작 · 5분 전부터 지금까지 ${data.minutes}분)` : `최근 ${data.minutes}분`}에 있었던 일 <span class="sub">프로세스 변화는 코드가 1분 이력으로 계산하고, 설명은 AI가 씁니다</span></div>
+          <div class="sec-h">${data.eventStart ? `이벤트 구간 (${hx(String(data.eventStart).slice(11, 16))} 시작 · 5분 전부터 지금까지 ${data.minutes}분)` : `최근 ${data.minutes}분`}에 있었던 일 <span class="sub">프로세스 변화는 코드가 1분 이력으로 계산하고, 설명은 AI가 씁니다</span></div>
           ${d.timeline ? `<div class="timeline-box">🕒 ${hx(d.timeline)}</div>` : ""}
           <div class="sec-h" style="margin-bottom:6px">서버 CPU ${spark(trend, 1, "#3f6ad8", 220, 34)} <span class="sub">메모리</span> ${spark(trend, 2, "#2e9e52", 120, 34)}</div>
           <div class="sus-wrap"><table class="sus-table">
@@ -942,6 +1048,84 @@
         <div class="diag-row"><div class="r-label">확인 방법</div><div class="r-text">${hxt(d.check)}</div></div>
         <div class="diag-row"><div class="r-label">권장 조치</div><div class="r-text">${hxt(d.action)}</div></div>
       </div>`;
+      }
+
+      // 1차 진단의 근거가 약하면(새로 등장한 원인 후보 없음 등, 판단은 정해진 규칙) 사람에게 묻는다
+      let lastReq = null;
+      function widenHtml(data) {
+        if (!data.widenSuggested) return "";
+        return `<div class="widen-box" id="widen-box">${hx(data.widenReason)}
+          <div class="q">과거 데이터까지 분석할까요?</div>
+          <div class="sub" style="color:#6b7385;font-size:12px;margin-bottom:10px">평소 이 시간대 지표(지난 7일) · 과거 비슷한 이벤트의 처리 기록 · 같은 시간대 다른 서버 이벤트까지 함께 봅니다</div>
+          <button id="widen-yes" onclick="runWider()">예, 과거 데이터까지 분석</button><button class="no" onclick="document.getElementById('widen-box').remove()">아니요</button>
+        </div>`;
+      }
+
+      async function runWider() {
+        const box = document.getElementById("widen-box");
+        document.getElementById("widen-yes").disabled = true;
+        box.insertAdjacentHTML("beforeend", '<div id="wider-wait" style="color:#9098aa;padding-top:10px">과거 데이터와 다른 서버 이벤트까지 모아 다시 진단하는 중입니다...</div>');
+        try {
+          const res = await fetch("/api/ai/diagnose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...lastReq, extended: true }),
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            document.getElementById("wider-wait").textContent = data.reply;
+            return;
+          }
+          lastDiag = data;
+          // 1차 진단의 조치 칸은 2차 결과로 대신한다 (같은 칸이 두 번 나오지 않게)
+          document.querySelectorAll("#diag-result .act-sec").forEach((el) => el.remove());
+          box.outerHTML = `<div class="wider" id="wider">${widerBody(data)}</div>`;
+          selectTarget();
+          document.getElementById("wider").scrollIntoView({ behavior: "smooth", block: "start" });
+        } catch (e) {
+          console.log(e);
+          document.getElementById("wider-wait").textContent = "2차 진단 중 오류가 발생했습니다.";
+        }
+      }
+
+      // 2차 진단: 시스템이 모은 근거(다른 서버 이벤트 · 평소 대비 · 과거 처리 기록) + AI 해석 + 근본 원인 서버
+      function widerBody(data) {
+        const c = data.context || {};
+        const d = data.diagnosis || {};
+        const others = (c.otherEvents || []).length
+          ? c.otherEvents
+              .map(
+                (o) => `<div class="it"><b>${hx(o.server)}</b> ${hx(o.resource)} ${hx(o.level)} · ${hx(o.startedAt)} 시작 <span class="muted">(${hx(o.relation)})</span>${
+                  (o.newProcesses || []).length ? `<br>새로 등장: ${o.newProcesses.map(hx).join(", ")}` : ""
+                }</div>`,
+              )
+              .join("")
+          : '<div class="muted">같은 시간대에 다른 서버 이벤트는 없습니다.</div>';
+        const pct = (m, k) => (m && m[k] != null ? m[k] + "%" : "-");
+        const base = (c.baseline || [])
+          .map(
+            (b) => `<div class="it"><b>${hx(b.server)}</b> ${hx(b.window)}<br>CPU 지금 ${pct(b.nowAvg, "cpu")} (평소 ${pct(b.usualAvg, "cpu")}) · 메모리 ${pct(b.nowAvg, "memory")} (평소 ${pct(b.usualAvg, "memory")})</div>`,
+          )
+          .join("");
+        const usual = (c.processUsual || []).map((u) => `<div class="it"><b>${hx(u.process)}</b> <span class="muted">${hx(u.server)}</span><br>${hx(u.usual)}</div>`).join("");
+        const past = (c.pastIncidents || []).length
+          ? c.pastIncidents.map((p) => `<div class="it"><b>${hx(p.when)}</b> ${hx(p.server)} ${hx(p.resource)} ${hx(p.level)} · ${hx(p.status)}<br>${hx(p.note)}</div>`).join("")
+          : '<div class="muted">같은 서버·자원의 과거 처리 기록이 없습니다.</div>';
+        const root = data.root
+          ? `<div class="root-box">근본 원인 후보: <b>${hx(data.root.server)}</b>${data.root.cause ? " — " + hx(data.root.cause) : ""}<br>
+              이 서버의 변화는 증상일 가능성이 큽니다. 원인 서버를 먼저 진단해 주세요.<br>
+              <a class="go-root" href="/ai?serverId=${encodeURIComponent(data.root.serverId)}&since=${encodeURIComponent(data.root.since)}&run=1&extended=1#diagnose">${hx(data.root.server)} 진단으로 이동 →</a></div>`
+          : "";
+        const pastNote = d.pastNote ? `<div class="diag-row"><div class="r-label">과거 데이터에서 참고한 점</div><div class="r-text">${hxt(d.pastNote)}</div></div>` : "";
+        return `<div class="wider-h">✦ 2차 진단 · 과거 데이터까지 <span class="sub" style="color:#9098aa;font-weight:400;font-size:12px">근거는 시스템이 모으고, 해석은 AI가 합니다</span></div>
+          <div class="ctx-grid">
+            <div class="ctx-card"><div class="ch">① 같은 시간대 다른 서버 이벤트</div>${others}</div>
+            <div class="ctx-card"><div class="ch">② 평소 대비 (지난 7일 같은 시간대)</div>${base}${usual}</div>
+            <div class="ctx-card"><div class="ch">③ 과거 비슷한 이벤트의 처리 기록</div>${past}</div>
+          </div>
+          ${diagHtml(d).replace('<div class="diag-row"><div class="r-label">확인 방법</div>', pastNote + '<div class="diag-row"><div class="r-label">확인 방법</div>')}
+          ${root}
+          ${data.root ? "" : actionHtml(data)}`;
       }
 
       function actionHtml(data) {
@@ -1091,9 +1275,10 @@
       // 진단할 서버 목록 (온라인 서버만 선택 가능). 주소에 ?serverId=가 있으면 처음 한 번 그 서버를 고른다
       const params = new URLSearchParams(location.search);
       let wantServer = params.get("serverId");
-      // 알림·사건에서 들어오면(?since=사건 시작 epoch ms) 진단 구간 = "사건 시작 5분 전 ~ 지금" (화면 선택칸 없이 자동)
+      // 알림·이벤트에서 들어오면(?since=이벤트 시작 epoch ms) 진단 구간 = "이벤트 시작 5분 전 ~ 지금" (화면 선택칸 없이 자동)
       const DIAG_MINUTES = Number(params.get("minutes")) || 30;
       const diagSince = params.get("since") ? Number(params.get("since")) : null;
+      const diagExtended = params.get("extended") === "1";
       async function loadServerOptions() {
         const sel = document.getElementById("diag-server");
         const prev = wantServer || sel.value;
@@ -1113,7 +1298,7 @@
           const keep = list.find((s) => String(s.id) === prev && s.online);
           const first = list.find((s) => s.online);
           sel.value = keep ? keep.id : first ? first.id : "";
-          // 알림(사건)에서 "AI 진단"으로 들어왔으면 바로 진단 실행
+          // 알림(이벤트)에서 "AI 진단"으로 들어왔으면 바로 진단 실행
           if (wantServer && params.get("run") === "1" && keep) runDiagnose();
           wantServer = null;
         } catch (e) {

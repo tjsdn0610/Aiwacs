@@ -11,10 +11,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 발생한 알람 한 건.
- * 프로토타입 단계라 메모리에만 둔다(재시작 시 초기화).
+ * 알람 엔진은 메모리에서 판정·갱신하고, 바뀔 때마다 DB(alarm_event / alarm_process)에 저장한다 (AlarmStore).
+ * 앱을 다시 켜면 최근 알람과 처리 기록을 DB에서 되살린다.
  *
  * 실제 AiWACS 부하 실측(2026-10-01)과 같은 방식:
- * - CPU 한 사건이 CPU / CPU Core / CPU User 여러 지표로 나뉘어 뜬다 (resource는 같고 metric이 여러 개).
+ * - CPU 한 이벤트가 CPU / CPU Core / CPU User 여러 지표로 나뉘어 뜬다 (resource는 같고 metric이 여러 개).
  * - 레벨마다 알람이 따로 생긴다. CPU가 장애까지 오르면 주의·경고·위험·장애 알람이 각각 열려 있고,
  *   값이 그 레벨 기준 아래로 내려가면 그 레벨 알람만 해제된다.
  * - 조건이 계속되는 동안 발생 횟수가 일정 간격(1분)마다 1씩 쌓인다.
@@ -95,6 +96,25 @@ public class Alarm {
         }
     }
 
+    /** DB에 저장된 알람을 메모리로 되살릴 때 (AlarmRow → Alarm) */
+    static Alarm restore(long id, Long serverId, String server, String company, String resource, String metric,
+                         String level, int threshold, double firstValue, double value, Instant firstAt, Instant lastAt,
+                         Instant lastCountAt, Instant resolvedAt, int count, Status status) {
+        Alarm a = new Alarm(id, serverId, server, company, resource, metric, level, threshold, firstValue, firstAt);
+        a.value = value;
+        a.lastAt = lastAt != null ? lastAt : firstAt;
+        a.lastCountAt = lastCountAt != null ? lastCountAt : a.lastAt;
+        a.resolvedAt = resolvedAt;
+        a.count = count;
+        a.status = status;
+        return a;
+    }
+
+    /** DB에서 읽은 처리 기록을 붙일 때 */
+    void restoreProcess(ProcessRecord r) {
+        processes.add(r);
+    }
+
     public void resolve(Instant now) {
         if (status == Status.ACTIVE) {
             status = Status.RESOLVED;
@@ -103,13 +123,17 @@ public class Alarm {
     }
 
     /** 처리 기록 추가. 발생/해제 상태는 바꾸지 않는다 (값이 내려가면 코드가 따로 해제). */
-    public void process(ProcessStatus s, String by, String note, Instant now) {
-        processes.add(new ProcessRecord(s, note, by, now, false));
+    public ProcessRecord process(ProcessStatus s, String by, String note, Instant now) {
+        ProcessRecord r = new ProcessRecord(s, note, by, now, false);
+        processes.add(r);
+        return r;
     }
 
-    /** 사람이 승인한 조치(프로세스 종료 등)의 결과를 처리 기록으로 남긴다 — 처리 내역 하나에서 사건 경과를 다 보게 */
-    public void processByAction(String by, String note, Instant now) {
-        processes.add(new ProcessRecord(ProcessStatus.MAINTENANCE, note, by, now, true));
+    /** 사람이 승인한 조치(프로세스 종료 등)의 결과를 처리 기록으로 남긴다 — 처리 내역 하나에서 이벤트 경과를 다 보게 */
+    public ProcessRecord processByAction(String by, String note, Instant now) {
+        ProcessRecord r = new ProcessRecord(ProcessStatus.MAINTENANCE, note, by, now, true);
+        processes.add(r);
+        return r;
     }
 
     public List<ProcessRecord> getProcesses() { return processes; }
@@ -126,6 +150,9 @@ public class Alarm {
     public String getMetric() { return metric; }
     public String getLevel() { return level; }
     public int getCount() { return count; }
+    public int getThreshold() { return threshold; }
+    public double getFirstValue() { return firstValue; }
+    public Instant getLastCountAt() { return lastCountAt; }
     public Instant getFirstAt() { return firstAt; }
     public Instant getLastAt() { return lastAt; }
     public Instant getResolvedAt() { return resolvedAt; }

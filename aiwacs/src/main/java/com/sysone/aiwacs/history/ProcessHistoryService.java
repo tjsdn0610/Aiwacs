@@ -137,6 +137,11 @@ public class ProcessHistoryService {
         return rows;
     }
 
+    /** 한 프로세스의 지난 기록 (평소 이 프로세스가 언제 돌았는지 계산용) */
+    public List<ProcessHistory> ofProcess(Long serverId, String name, Instant from, Instant to) {
+        return repository.findByServerIdAndNameAndTimeGreaterThanEqualAndTimeLessThanOrderByTimeAsc(serverId, name, from, to);
+    }
+
     /** 화면 표시용 */
     public static Map<String, Object> toMap(ProcessHistory h) {
         Map<String, Object> m = new LinkedHashMap<>();

@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.sysone.aiwacs.alarm.AlarmService;
@@ -16,11 +18,13 @@ import tools.jackson.databind.JsonNode;
 /**
  * AI 운영 도우미.
  * - 임계치 설정: AI는 자연어 → JSON "번역"만, 검증·저장은 PolicyService(코드)가 한다.
- * - 알림 묶기: 묶음은 코드가, AI는 사건마다 제목·원인·조치만 쓴다.
+ * - 알림 묶기: 묶음은 코드가, AI는 이벤트마다 제목·원인·조치만 쓴다.
  * (상태 진단·조치 제안·처리 기록 초안은 DiagnosisService)
  */
 @Service
 public class AiService {
+
+    private static final Logger log = LoggerFactory.getLogger(AiService.class);
 
     static final String NOT_CONFIGURED = "AI가 설정되지 않았습니다 (AI 설정값 확인 필요).";
     static final String NOT_UNDERSTOOD = "명령을 이해하지 못했습니다. 다시 말씀해 주세요.";
@@ -212,16 +216,16 @@ public class AiService {
         return String.join("\n", items.stream().map(s -> "• " + s).toList());
     }
 
-    // ===== AI 알림 그룹핑 (여러 지표 알림을 '하나의 사건'으로 묶고 조합을 해석) =====
+    // ===== AI 알림 그룹핑 (여러 지표 알림을 '하나의 이벤트'으로 묶고 조합을 해석) =====
     // 관찰: CPU 하나가 올라도 CPU / CPU Core / CPU User 가 각각 임계를 넘어 알림이 여러 건 뜬다.
-    // AiWACS의 탐지·판정은 그대로 두고(원본 알림 보존), AI는 관제자에게 '사건 단위'로 접어 보여준다.
+    // AiWACS의 탐지·판정은 그대로 두고(원본 알림 보존), AI는 관제자에게 '이벤트 단위'로 접어 보여준다.
     private static final Map<String, String> METRIC_KR2 = Map.of("cpu", "CPU", "memory", "메모리", "disk", "디스크");
 
     /**
-     * 현재 발생 알림을 사건 단위로 묶고 해석한다.
-     * - 어떤 알림끼리 한 사건인지는 코드(AlarmService.events)가 정한다: 같은 서버 + 같은 자원 → 한 사건.
+     * 현재 발생 알림을 이벤트 단위로 묶고 해석한다.
+     * - 어떤 알림끼리 한 이벤트인지는 코드(AlarmService.events)가 정한다: 같은 서버 + 같은 자원 → 한 이벤트.
      *   (실측: CPU 한 번 오른 것이 CPU/CPU Core/CPU User × 주의·경고·장애로 불어나고, 발생 횟수·시각이 똑같았다)
-     * - AI는 묶인 사건마다 제목·원인·조치만 쓴다. AI가 실패해도 묶음 자체는 그대로 보여준다.
+     * - AI는 묶인 이벤트마다 제목·원인·조치만 쓴다. AI가 실패해도 묶음 자체는 그대로 보여준다.
      * (demo 인자는 예전 화면 호환용으로 남겨 두었고, 묶기는 항상 실제 알림 기준)
      *
      * @param includeOpenWork true면 해제됐어도 처리가 끝나지 않은 알림까지 묶는다 (알림 내역 화면용)
@@ -240,17 +244,30 @@ public class AiService {
         if (!ai.isConfigured()) {
             aiNote = NOT_CONFIGURED;
         } else {
-            try {
-                JsonNode result = ai.extractJson(ai.generate(groupPrompt(events)), false);
-                for (JsonNode n : result.path("events")) {
-                    byKey.put(n.path("key").asString(""), n);
+            // AI가 형식을 어기면 두 번까지 더 물어본다. 그래도 안 되면 묶음은 그대로 두고 기본 문구로 보여준다
+            for (int attempt = 1; attempt <= 3; attempt++) {
+                String raw = null;
+                try {
+                    raw = ai.generate(groupPrompt(events));
+                    // 작은 모델은 {"events": [...]} 대신 목록 [...]만 보내기도 한다 → 둘 다 받는다
+                    JsonNode result = ai.extractJson(raw, raw.strip().replace("```json", "").strip().startsWith("["));
+                    JsonNode list = result.isArray() ? result : result.path("events");
+                    for (JsonNode n : list) {
+                        byKey.put(n.path("key").asString(""), n);
+                    }
+                    aiNote = null;
+                    break;
+                } catch (AiClient.AiBusyException e) {
+                    aiNote = AI_BUSY;
+                    break;
+                } catch (AiClient.AiUnavailableException e) {
+                    aiNote = AI_UNAVAILABLE;
+                    break;
+                } catch (Exception e) {
+                    log.warn("AI 이벤트 해석 형식 오류 ({}회째): {} / 응답 앞부분: {}", attempt, shortError(e),
+                            raw == null ? "-" : raw.substring(0, Math.min(400, raw.length())).replace("\n", " "));
+                    aiNote = "AI 해석이 형식에 맞지 않아, 이벤트 묶음만 보여 드립니다. [새로고침]으로 다시 해석할 수 있습니다.";
                 }
-            } catch (AiClient.AiBusyException e) {
-                aiNote = AI_BUSY;
-            } catch (AiClient.AiUnavailableException e) {
-                aiNote = AI_UNAVAILABLE;
-            } catch (Exception e) {
-                aiNote = "AI 해석 실패: " + shortError(e);
             }
         }
 
@@ -259,10 +276,10 @@ public class AiService {
             JsonNode n = byKey.get(String.valueOf(e.get("key")));
             String res = METRIC_KR2.getOrDefault(String.valueOf(e.get("resource")), String.valueOf(e.get("resource")));
             Map<String, Object> ev = new LinkedHashMap<>(e);
-            ev.put("title", text(n, "title", e.get("server") + " " + res + " 사건"));
+            ev.put("title", text(n, "title", e.get("server") + " " + res + " 이벤트"));
             ev.put("count", e.get("alarmCount"));    // 예전 화면 호환: 묶은 알림 수
             ev.put("members", e.get("alarms"));       // 예전 화면 호환: 묶인 알림 목록
-            ev.put("cause", text(n, "cause", "(AI 해석 없음) 같은 서버·같은 자원에서 동시에 발생한 알림을 한 사건으로 묶었습니다."));
+            ev.put("cause", text(n, "cause", "(AI 해석 없음) 같은 서버·같은 자원에서 동시에 발생한 알림을 한 이벤트로 묶었습니다."));
             ev.put("action", text(n, "action", "-"));
             out.add(ev);
         }
@@ -285,25 +302,27 @@ public class AiService {
 
     private String groupPrompt(List<Map<String, Object>> events) {
         return """
-                당신은 관제(NOC) 도우미입니다. 아래는 AiWACS 알림을 시스템이 이미 '사건' 단위로 묶어 둔 것입니다.
-                묶음과 레벨 판정은 정확하니 바꾸지 마세요. 사건마다 관제자가 바로 이해할 제목·원인·조치만 쓰세요.
+                당신은 관제(NOC) 도우미입니다. 아래는 AiWACS 알림을 시스템이 이미 '이벤트' 단위로 묶어 둔 것입니다.
+                묶음과 레벨 판정은 정확하니 바꾸지 마세요. 이벤트마다 관제자가 바로 이해할 제목·원인·조치만 쓰세요.
 
                 [알아둘 점]
                 - AiWACS는 한 자원을 여러 세부 지표(CPU / CPU Core / CPU User)로, 그리고 레벨(주의·경고·위험·장애)마다
                   따로 알림을 냅니다. 그래서 alarmCount가 커도 실제로는 한 번의 상승일 수 있습니다.
-                - byLevel은 레벨별 알림 수, occurrences는 발생 횟수 합계, firstAt~lastAt은 사건 구간입니다.
+                - byLevel은 레벨별 알림 수, occurrences는 발생 횟수 합계, firstAt~lastAt은 이벤트 구간입니다.
                 - 세부 지표 조합으로 원인 유형을 추정하세요:
                   · User·Core·전체가 함께 → 전 코어 계산 부하
                   · Core만 높고 전체는 낮음 → 단일 스레드 병목 가능성
                   · Wait만 높음 → CPU가 아니라 디스크/IO 대기 가능성
                   · System만 높음 → 커널/네트워크/컨텍스트 스위치 폭주 가능성
-                - 같은 서버에 다른 자원 사건이 함께 있으면(예: CPU와 메모리) 연관 가능성을 짚으세요.
+                - 같은 서버에 다른 자원 이벤트가 함께 있으면(예: CPU와 메모리) 연관 가능성을 짚으세요.
+                - 서로 다른 서버의 이벤트가 비슷한 시각(firstAt)에 시작했으면, 한쪽이 다른 쪽의 원인일 가능성을 짚으세요
+                  (예: DB서버 이벤트가 먼저 시작하고 웹서버 이벤트가 뒤따르면 → DB 지연으로 웹서버 요청이 쌓였을 가능성).
                 - 원인은 단정하지 말고 "가능성"으로. 반드시 JSON만 답하세요.
 
                 [출력 형식] key는 입력의 key를 그대로 쓰세요.
-                {"events": [{"key": "입력 key", "title": "사건 요약(예: server1 CPU 장애 — 알림 12건이 한 번의 CPU 상승)", "cause": "원인 추정", "action": "권장 조치"}]}
+                {"events": [{"key": "입력 key", "title": "이벤트 요약(예: server1 CPU 장애 — 알림 12건이 한 번의 CPU 상승)", "cause": "원인 추정", "action": "권장 조치"}]}
 
-                [사건 목록]
+                [이벤트 목록]
                 %s""".formatted(ai.toJson(events));
     }
 
@@ -317,7 +336,7 @@ public class AiService {
         return alarmService.activeAlarms();
     }
 
-    /** 부하 실험에서 실제로 관찰한 알림 세트 (CPU 한 사건이 세 지표로 분리되어 뜬 상황) */
+    /** 부하 실험에서 실제로 관찰한 알림 세트 (CPU 한 이벤트가 세 지표로 분리되어 뜬 상황) */
     private List<Map<String, Object>> demoAlarms() {
         return List.of(
                 alarm("server1", "테라넷", "CPU (Core) >= 40%", "경고", 100),

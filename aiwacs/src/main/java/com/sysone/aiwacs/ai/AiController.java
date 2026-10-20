@@ -45,7 +45,7 @@ public class AiController {
         return aiService.listAlarms(demo);
     }
 
-    /** AI 알림 그룹핑 (여러 지표 알림을 한 사건으로 묶기) — body: {"demo": true|false} */
+    /** AI 알림 그룹핑 (여러 지표 알림을 한 이벤트로 묶기) — body: {"demo": true|false} */
     @PostMapping("/alarm-group")
     public Map<String, Object> alarmGroup(@RequestBody(required = false) Map<String, Object> body) {
         boolean demo = body != null && Boolean.parseBoolean(String.valueOf(body.get("demo")));
@@ -56,7 +56,7 @@ public class AiController {
 
     /**
      * 상태 진단 — body: {"serverId": 1, "minutes": 30} (minutes 0 = 지금 이 순간만)
-     * 사건에서 들어오면 {"serverId": 1, "since": 사건 시작 epoch ms} → 구간을 "사건 시작 5분 전 ~ 지금"으로 자동 설정
+     * 이벤트에서 들어오면 {"serverId": 1, "since": 이벤트 시작 epoch ms} → 구간을 "이벤트 시작 5분 전 ~ 지금"으로 자동 설정
      */
     @PostMapping("/diagnose")
     public Map<String, Object> diagnose(@RequestBody Map<String, Object> body) {
@@ -75,8 +75,10 @@ public class AiController {
         } catch (NumberFormatException ignored) {
             // 잘못된 값이면 서버는 null → "서버를 선택해 주세요" 안내, 구간은 기본 30분
         }
+        // extended = 사람이 [과거 데이터까지 분석]을 고른 2차 진단
+        boolean extended = Boolean.parseBoolean(String.valueOf(body.get("extended")));
         return since != null
-                ? diagnosis.diagnoseSince(serverId, Instant.ofEpochMilli(since))
-                : diagnosis.diagnose(serverId, minutes);
+                ? diagnosis.diagnoseSince(serverId, Instant.ofEpochMilli(since), extended)
+                : diagnosis.diagnose(serverId, minutes, extended);
     }
 }

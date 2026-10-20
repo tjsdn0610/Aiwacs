@@ -1,5 +1,6 @@
 package com.sysone.aiwacs.ai;
 
+import tools.jackson.core.json.JsonReadFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -11,8 +12,15 @@ public abstract class AiClient {
 
     protected final JsonMapper jsonMapper;
 
+    /** AI 응답 읽기 전용: 작은 모델이 자주 하는 형식 실수(작은따옴표, 끝의 쉼표, 따옴표 없는 키)는 너그럽게 읽는다 */
+    private final JsonMapper lenientMapper;
+
     protected AiClient(JsonMapper jsonMapper) {
         this.jsonMapper = jsonMapper;
+        this.lenientMapper = jsonMapper.rebuild()
+                .enable(JsonReadFeature.ALLOW_SINGLE_QUOTES, JsonReadFeature.ALLOW_TRAILING_COMMA,
+                        JsonReadFeature.ALLOW_UNQUOTED_PROPERTY_NAMES)
+                .build();
     }
 
     /** 호출에 필요한 설정(API 키, 주소 등)이 갖춰졌는지 */
@@ -51,7 +59,7 @@ public abstract class AiClient {
         if (s != -1 && e != -1 && s <= e) {
             raw = raw.substring(s, e + 1);
         }
-        return jsonMapper.readTree(raw);
+        return lenientMapper.readTree(raw);
     }
 
     public String toJson(Object value) {

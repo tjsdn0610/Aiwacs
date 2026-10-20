@@ -51,7 +51,7 @@
       .pager { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; font-size: 12px; color: #7a8194; }
       .pager button { font-family: inherit; border: 1px solid #d5d9e2; background: #fff; border-radius: 6px; padding: 3px 9px; cursor: pointer; color: #3a3f52; }
       .pager button:disabled { opacity: .4; cursor: default; }
-      /* 사건 묶기: 한 사건 = 한 줄 */
+      /* 이벤트 묶기: 한 이벤트 = 한 줄 */
       .ev-table { font-size: 12.5px; }
       .ev-table td { padding: 9px 10px; border-bottom: 1px solid #eef0f4; white-space: nowrap; vertical-align: middle; }
       .ev-row { cursor: pointer; }
@@ -83,7 +83,7 @@
       .handle { padding: 14px 16px; border-top: 1px solid #eef0f4; display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; background: #fafbfd; border-radius: 0 0 10px 10px; }
       .handle .lbl { font-weight: 700; color: #3a3f52; font-size: 12.5px; padding-top: 8px; }
       .handle select { font-family: inherit; font-size: 13px; border: 1px solid #d5d9e2; border-radius: 8px; padding: 8px 10px; background: #fff; }
-      .handle textarea { flex: 1; min-width: 240px; min-height: 64px; font-family: inherit; font-size: 13px; border: 1px solid #d5d9e2; border-radius: 8px; padding: 8px 11px; resize: vertical; line-height: 1.5; }
+      .handle textarea { flex: 1; min-width: 240px; min-height: 96px; font-family: inherit; font-size: 13px; border: 1px solid #d5d9e2; border-radius: 8px; padding: 8px 11px; resize: vertical; line-height: 1.5; }
       .handle .col { display: flex; flex-direction: column; gap: 6px; }
       .btn.ai { background: #fff; color: #3f6ad8; border: 1px solid #b9c9f2; }
       .btn.ai:hover { background: #eef3fc; }
@@ -108,12 +108,12 @@
         <div class="content">
           <div class="bar">
             <button class="btn ghost" onclick="load()">새로고침</button>
-            <button class="btn" id="groupBtn" onclick="groupActive()" title="발생 중이거나 아직 처리가 끝나지 않은 알림을 같은 서버·같은 자원 기준으로 사건 단위로 모아 봅니다 (원본 알림은 그대로)">✦ AI로 사건 묶기</button>
+            <button class="btn" id="groupBtn" onclick="groupActive()" title="발생 중이거나 아직 처리가 끝나지 않은 알림을 같은 서버·같은 자원 기준으로 이벤트 단위로 모아 봅니다 (원본 알림은 그대로)">✦ AI로 이벤트 묶기</button>
             <span id="filter"></span>
             <span class="grow"></span>
           </div>
 
-          <!-- 사건 묶기 결과: 표 위에 표시 (알림이 많아도 바로 보이게) -->
+          <!-- 이벤트 묶기 결과: 표 위에 표시 (알림이 많아도 바로 보이게) -->
           <div class="grp" id="grp"></div>
 
           <div class="card">
@@ -163,7 +163,7 @@
       let toastTimer;
       function toast(m) { const t = document.getElementById("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600); }
 
-      // 주소로 들어온 조건: ?server=이름 (AI 진단에서 넘어옴) / ?select=1,2,3 (사건에서 넘어옴)
+      // 주소로 들어온 조건: ?server=이름 (AI 진단에서 넘어옴) / ?select=1,2,3 (이벤트에서 넘어옴)
       const params = new URLSearchParams(location.search);
       const serverFilter = params.get("server");
       let preselect = params.get("select") ? params.get("select").split(",").map(Number) : null;
@@ -263,7 +263,7 @@
         ids.forEach((id) => selected.add(id));
         load();
         document.querySelector(".handle").scrollIntoView({ behavior: "smooth", block: "center" });
-        toast(`사건의 알림 ${ids.length}건을 선택했습니다. 처리 상태를 고르고 기록하세요.`);
+        toast(`이벤트의 알림 ${ids.length}건을 선택했습니다. 처리 상태를 고르고 기록하세요.`);
       }
 
       // AI 처리 기록 초안: 진단 결과 + 조치 이력 + 알림 경과로 초안을 받아 입력칸에 넣는다 (저장은 사람이)
@@ -303,8 +303,8 @@
         } catch (e) { toast("처리 중 오류가 발생했습니다."); }
       }
 
-      // 사건 묶기: 발생 중 + 아직 처리가 끝나지 않은 알림을 사건 단위로 모아 표 '위'에 보여준다 (원본 알림은 그대로)
-      // 한 사건 = 한 줄 (레벨별 알림 수는 작은 칩). AI 원인·조치는 줄을 눌렀을 때만 펼친다.
+      // 이벤트 묶기: 발생 중 + 아직 처리가 끝나지 않은 알림을 이벤트 단위로 모아 표 '위'에 보여준다 (원본 알림은 그대로)
+      // 한 이벤트 = 한 줄 (레벨별 알림 수는 작은 칩). AI 원인·조치는 줄을 눌렀을 때만 펼친다.
       const RES_KR = { cpu: "CPU", memory: "메모리", disk: "디스크" };
       const LV_ORDER = ["장애", "위험", "경고", "주의"];
       const EV_SHOW = 5;
@@ -317,7 +317,7 @@
         const btn = document.getElementById("groupBtn");
         btn.disabled = true;
         btn.textContent = "✦ 묶는 중…";
-        grp.innerHTML = '<div class="card"><div class="loading">같은 서버·같은 자원 알림을 사건으로 묶고, AI가 사건마다 원인을 해석하는 중…</div></div>';
+        grp.innerHTML = '<div class="card"><div class="loading">같은 서버·같은 자원 알림을 이벤트로 묶고, AI가 이벤트마다 원인을 해석하는 중…</div></div>';
         try {
           const d = await (await fetch("/api/ai/alarm-group", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demo: false, scope: "open" }) })).json();
           if (!d.ok) { grp.innerHTML = `<div class="card"><div class="empty" style="color:#a03535">${esc(d.reply)}</div></div>`; return; }
@@ -333,7 +333,7 @@
           grp.innerHTML = '<div class="card"><div class="empty" style="color:#a03535">묶기 중 오류가 발생했습니다.</div></div>';
         } finally {
           btn.disabled = false;
-          btn.textContent = "✦ AI로 사건 묶기";
+          btn.textContent = "✦ AI로 이벤트 묶기";
         }
       }
 
@@ -353,7 +353,7 @@
               <td>${chips}</td>
               <td>${state}</td>
               <td class="ev-go" onclick="event.stopPropagation()">
-                <a href="/ai?serverId=${esc(String(e.key).split("|")[0])}&since=${esc(e.firstAtMillis)}&run=1#diagnose" title="사건 시작 5분 전부터 지금까지를 진단합니다">✦ 진단·조치</a>
+                <a href="/ai?serverId=${esc(String(e.key).split("|")[0])}&since=${esc(e.firstAtMillis)}&run=1#diagnose" title="이벤트 시작 5분 전부터 지금까지를 진단합니다">✦ 진단·조치</a>
                 <button onclick='selectIds(${JSON.stringify(e.alarmIds || [])})'>알림 ${esc(e.alarmCount)}건 선택</button>
               </td>
             </tr>`;
@@ -367,10 +367,10 @@
           return main + detail;
         }).join("");
         const more = evList.length > EV_SHOW
-          ? `<div class="ev-moreall"><button onclick="evAll=!evAll; renderEvents(${raw})">${evAll ? "접기" : `사건 ${evList.length - EV_SHOW}건 더 보기`}</button></div>`
+          ? `<div class="ev-moreall"><button onclick="evAll=!evAll; renderEvents(${raw})">${evAll ? "접기" : `이벤트 ${evList.length - EV_SHOW}건 더 보기`}</button></div>`
           : "";
         document.getElementById("grp").innerHTML = `<div class="card">
-          <div class="card-head">✦ 사건 <span class="cnt">${evList.length}</span>건
+          <div class="card-head">✦ 이벤트 <span class="cnt">${evList.length}</span>건
             <span class="sub" style="font-weight:400">알림 ${raw}건을 서버·자원별로 모음 · 줄을 누르면 AI 원인·조치</span>
             <span class="x" onclick="document.getElementById('grp').innerHTML=''" title="닫기">✕</span></div>
           ${aiNote ? `<div class="sub" style="padding:8px 16px 0;color:#a0661a">${esc(aiNote)} — 묶음만 표시합니다.</div>` : ""}

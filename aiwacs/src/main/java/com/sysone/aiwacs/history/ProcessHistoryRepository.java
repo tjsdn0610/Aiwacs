@@ -12,6 +12,9 @@ public interface ProcessHistoryRepository extends JpaRepository<ProcessHistory, 
 
     List<ProcessHistory> findByServerIdAndTimeGreaterThanEqualOrderByTimeAsc(Long serverId, Instant from);
 
+    /** 한 프로세스가 지난 기간 언제 돌았는지 (평소 대비용) */
+    List<ProcessHistory> findByServerIdAndNameAndTimeGreaterThanEqualAndTimeLessThanOrderByTimeAsc(Long serverId, String name, Instant from, Instant to);
+
     /** 보관 기간이 지난 이력 삭제 */
     @Transactional
     @Modifying
